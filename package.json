@@ -1,0 +1,20 @@
+{
+  "name": "grid-voice-app",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "infra/*"
+  ],
+  "scripts": {
+    "build": "npm run build -ws --if-present",
+    "typecheck": "npm run typecheck -ws --if-present",
+    "lint": "npm run lint -ws --if-present",
+    "test": "npm run test -ws --if-present",
+    "dev:web": "npm run dev -w @grid-voice/web"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

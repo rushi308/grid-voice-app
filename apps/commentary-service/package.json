@@ -1,0 +1,19 @@
+{
+  "name": "@grid-voice/commentary-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@grid-voice/types": "*",
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.872.0",
+    "@types/aws-lambda": "^8.10.152"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
+}

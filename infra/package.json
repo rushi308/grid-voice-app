@@ -1,0 +1,23 @@
+{
+  "name": "@grid-voice/infra-cdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "synth": "npm run build && cdk synth",
+    "deploy": "npm run build && cdk deploy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.169.0",
+    "constructs": "^10.4.2",
+    "dotenv": "^17.3.1",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.6",
+    "aws-cdk": "^2.169.0",
+    "esbuild": "^0.25.12"
+  }
+}
