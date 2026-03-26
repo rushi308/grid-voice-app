@@ -1,6 +1,8 @@
 import type { APIGatewayProxyWebsocketEventV2 } from "aws-lambda";
 import type {
   LiveRaceFeedEvent,
+  SendDataEnvelope,
+  WsRaceContext,
   WsCommentaryRequest,
   WsCommentaryTone,
   WsIncomingPayload,
@@ -40,7 +42,15 @@ export class WebSocketEventParser {
     };
   }
 
-  parseSendDataEvent(event: APIGatewayProxyWebsocketEventV2): LiveRaceFeedEvent {
+  parseSendDataEvent(
+    event: APIGatewayProxyWebsocketEventV2,
+  ): LiveRaceFeedEvent {
+    return this.parseSendDataEnvelope(event).payload;
+  }
+
+  parseSendDataEnvelope(
+    event: APIGatewayProxyWebsocketEventV2,
+  ): SendDataEnvelope {
     if (!event.body) {
       throw new Error("Request body is required.");
     }
@@ -54,58 +64,82 @@ export class WebSocketEventParser {
 
     const candidate = this.toObject(body.payload ?? body, "payload");
     const type = this.toNonEmptyString(candidate.type, "type");
+    const race = this.toRaceContext(body.race);
 
     switch (type) {
       case "race_control":
         return {
-          type: "race_control",
-          date: this.toNonEmptyString(candidate.date, "date"),
-          meeting_key: this.toNumber(candidate.meeting_key, "meeting_key"),
-          session_key: this.toNumber(candidate.session_key, "session_key"),
-          message: this.toNonEmptyString(candidate.message, "message"),
-          flag: this.toNonEmptyString(candidate.flag, "flag"),
+          action: "SendData",
+          payload: {
+            type: "race_control",
+            date: this.toNonEmptyString(candidate.date, "date"),
+            meeting_key: this.toNumber(candidate.meeting_key, "meeting_key"),
+            session_key: this.toNumber(candidate.session_key, "session_key"),
+            message: this.toNonEmptyString(candidate.message, "message"),
+            flag: this.toNonEmptyString(candidate.flag, "flag"),
+          },
+          ...(race ? { race } : {}),
         };
       case "location":
         return {
-          type: "location",
-          date: this.toNonEmptyString(candidate.date, "date"),
-          meeting_key: this.toNumber(candidate.meeting_key, "meeting_key"),
-          session_key: this.toNumber(candidate.session_key, "session_key"),
-          data: this.toLocationPoints(candidate.data),
+          action: "SendData",
+          payload: {
+            type: "location",
+            date: this.toNonEmptyString(candidate.date, "date"),
+            meeting_key: this.toNumber(candidate.meeting_key, "meeting_key"),
+            session_key: this.toNumber(candidate.session_key, "session_key"),
+            data: this.toLocationPoints(candidate.data),
+          },
+          ...(race ? { race } : {}),
         };
       case "overtake":
         return {
-          type: "overtake",
-          date: this.toNonEmptyString(candidate.date, "date"),
-          overtaking_driver_number: this.toNumber(
-            candidate.overtaking_driver_number,
-            "overtaking_driver_number",
-          ),
-          overtaken_driver_number: this.toNumber(
-            candidate.overtaken_driver_number,
-            "overtaken_driver_number",
-          ),
-          position: this.toNumber(candidate.position, "position"),
+          action: "SendData",
+          payload: {
+            type: "overtake",
+            date: this.toNonEmptyString(candidate.date, "date"),
+            overtaking_driver_number: this.toNumber(
+              candidate.overtaking_driver_number,
+              "overtaking_driver_number",
+            ),
+            overtaken_driver_number: this.toNumber(
+              candidate.overtaken_driver_number,
+              "overtaken_driver_number",
+            ),
+            position: this.toNumber(candidate.position, "position"),
+          },
+          ...(race ? { race } : {}),
         };
       case "event": {
-        const eventType = this.toNonEmptyString(candidate.event_type, "event_type");
+        const eventType = this.toNonEmptyString(
+          candidate.event_type,
+          "event_type",
+        );
 
         if (eventType === "RACE_FINISH") {
           return {
-            type: "event",
-            date: this.toNonEmptyString(candidate.date, "date"),
-            event_type: "RACE_FINISH",
-            results: this.toResults(candidate.results),
+            action: "SendData",
+            payload: {
+              type: "event",
+              date: this.toNonEmptyString(candidate.date, "date"),
+              event_type: "RACE_FINISH",
+              results: this.toResults(candidate.results),
+            },
+            ...(race ? { race } : {}),
           };
         }
 
         return {
-          type: "event",
-          date: this.toNonEmptyString(candidate.date, "date"),
-          event_type: eventType,
-          driver_number: this.toOptionalNumber(candidate.driver_number),
-          lap: this.toOptionalNumber(candidate.lap),
-          sector: this.toOptionalNumber(candidate.sector),
+          action: "SendData",
+          payload: {
+            type: "event",
+            date: this.toNonEmptyString(candidate.date, "date"),
+            event_type: eventType,
+            driver_number: this.toOptionalNumber(candidate.driver_number),
+            lap: this.toOptionalNumber(candidate.lap),
+            sector: this.toOptionalNumber(candidate.sector),
+          },
+          ...(race ? { race } : {}),
         };
       }
       default:
@@ -175,7 +209,9 @@ export class WebSocketEventParser {
     });
   }
 
-  private toResults(value: unknown): Array<{ position: number; driver_number: number }> {
+  private toResults(
+    value: unknown,
+  ): Array<{ position: number; driver_number: number }> {
     if (!Array.isArray(value)) {
       throw new Error("results must be an array.");
     }
@@ -187,5 +223,37 @@ export class WebSocketEventParser {
         driver_number: this.toNumber(obj.driver_number, "driver_number"),
       };
     });
+  }
+
+  private toRaceContext(value: unknown): WsRaceContext | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
+    const race = this.toObject(value, "race");
+    const season = this.toNumber(race.season, "race.season");
+    const round = this.toNumber(race.round, "race.round");
+
+    return {
+      season,
+      round,
+      slug: this.toOptionalString(race.slug),
+      name: this.toOptionalString(race.name),
+      country: this.toOptionalString(race.country),
+      date: this.toOptionalString(race.date),
+    };
+  }
+
+  private toOptionalString(value: unknown): string | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
+    if (typeof value !== "string") {
+      throw new Error("optional string must be a string when provided.");
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
   }
 }

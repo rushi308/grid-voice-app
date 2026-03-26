@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { LiveRaceFeedEvent } from "@grid-voice/types";
+import type { LiveRaceFeedEvent, WsRaceContext } from "@grid-voice/types";
 
 type SocketStatus = "idle" | "connecting" | "open" | "closed" | "error";
 
 type UseLiveRaceFeedSocketOptions = {
   enabled: boolean;
   events: LiveRaceFeedEvent[];
+  race?: WsRaceContext;
   wsUrl: string | undefined;
   sendIntervalMs?: number;
 };
@@ -41,6 +42,7 @@ function logSocketDebug(...args: unknown[]) {
 export function useLiveRaceFeedSocket({
   enabled,
   events,
+  race,
   wsUrl,
   sendIntervalMs = 4000,
 }: UseLiveRaceFeedSocketOptions): UseLiveRaceFeedSocketResult {
@@ -57,6 +59,8 @@ export function useLiveRaceFeedSocket({
   const nextSendTimerRef = useRef<number | null>(null);
   const awaitingServerRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioQueueRef = useRef<string[]>([]);
+  const isAudioPlayingRef = useRef(false);
   const indexRef = useRef(0);
 
   const totalCount = events.length;
@@ -79,24 +83,60 @@ export function useLiveRaceFeedSocket({
     setLastError(null);
     indexRef.current = 0;
     awaitingServerRef.current = false;
+    audioQueueRef.current = [];
+    isAudioPlayingRef.current = false;
 
     const socket = new WebSocket(wsUrl as string);
     socketRef.current = socket;
 
-    const playCommentaryAudio = async (audioUrl: string) => {
-      try {
-        if (!audioRef.current) {
-          audioRef.current = new Audio();
-          audioRef.current.preload = "auto";
-        }
+    const ensureAudioElement = (): HTMLAudioElement => {
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+        audioRef.current.preload = "auto";
+      }
 
-        audioRef.current.src = audioUrl;
-        await audioRef.current.play();
+      return audioRef.current;
+    };
+
+    const playNextQueuedAudio = async () => {
+      if (isAudioPlayingRef.current) {
+        return;
+      }
+
+      const nextUrl = audioQueueRef.current.shift();
+      if (!nextUrl) {
+        return;
+      }
+
+      const audio = ensureAudioElement();
+      isAudioPlayingRef.current = true;
+      setLatestAudioUrl(nextUrl);
+
+      try {
+        audio.src = nextUrl;
+        await audio.play();
       } catch {
+        isAudioPlayingRef.current = false;
         setLastError(
           "Audio autoplay was blocked by the browser. Tap the page, then it will play.",
         );
       }
+    };
+
+    const queueCommentaryAudio = (audioUrl: string) => {
+      audioQueueRef.current.push(audioUrl);
+      void playNextQueuedAudio();
+    };
+
+    const audio = ensureAudioElement();
+    audio.onended = () => {
+      isAudioPlayingRef.current = false;
+      void playNextQueuedAudio();
+    };
+    audio.onerror = () => {
+      isAudioPlayingRef.current = false;
+      setLastError("Could not play generated commentary audio.");
+      void playNextQueuedAudio();
     };
 
     const sendNextEvent = () => {
@@ -113,6 +153,7 @@ export function useLiveRaceFeedSocket({
         JSON.stringify({
           action: "SendData",
           payload: nextEvent,
+          race,
         }),
       );
 
@@ -161,8 +202,7 @@ export function useLiveRaceFeedSocket({
         }
 
         if (commentary.audioUrl) {
-          setLatestAudioUrl(commentary.audioUrl);
-          void playCommentaryAudio(commentary.audioUrl);
+          queueCommentaryAudio(commentary.audioUrl);
         }
 
         awaitingServerRef.current = false;
@@ -205,12 +245,17 @@ export function useLiveRaceFeedSocket({
       }
 
       if (audioRef.current) {
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
         audioRef.current.pause();
         audioRef.current.src = "";
         audioRef.current = null;
       }
+
+      audioQueueRef.current = [];
+      isAudioPlayingRef.current = false;
     };
-  }, [canConnect, events, sendIntervalMs, wsUrl]);
+  }, [canConnect, events, race, sendIntervalMs, wsUrl]);
 
   return {
     status,

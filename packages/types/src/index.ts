@@ -324,6 +324,15 @@ export interface RaceFinishFeedEvent {
   results: RaceFinishResult[];
 }
 
+export interface WsRaceContext {
+  season: number;
+  round: number;
+  slug?: string;
+  name?: string;
+  country?: string;
+  date?: string;
+}
+
 export type LiveRaceFeedEvent =
   | RaceControlFeedEvent
   | LocationFeedEvent
@@ -334,4 +343,5 @@ export type LiveRaceFeedEvent =
 export interface SendDataEnvelope {
   action: "SendData";
   payload: LiveRaceFeedEvent;
+  race?: WsRaceContext;
 }

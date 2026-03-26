@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLiveRaceFeedSocket } from "@/hooks/useLiveRaceFeedSocket";
 import { demoLiveEvents } from "@/lib/demoLiveEvents";
 import { season2026, type RaceTrack } from "@/lib/season2026";
@@ -20,6 +20,7 @@ export function HomePageClient() {
   const [raceStatus, setRaceStatus] = useState<"completed" | "upcoming">(
     "upcoming",
   );
+  const [isHydrated, setIsHydrated] = useState(false);
   const { raceClock, resetRaceClock } = useRaceClock();
   const { progressMap, resetProgressMap } = useAnimatedProgressMap();
   const isDemoRound = selectedRace.slug === "demo-live-round";
@@ -35,14 +36,43 @@ export function HomePageClient() {
     };
   }, [selectedRace.date]);
 
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      setIsHydrated(true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, []);
+
   const { completedSummary, completedSummaryLoading } = useCompletedRaceSummary(
     selectedRace,
     raceStatus,
   );
 
+  const liveRaceContext = useMemo(
+    () => ({
+      season: Number(selectedRace.date.slice(0, 4)) || 2026,
+      round: selectedRace.round,
+      slug: selectedRace.slug,
+      name: selectedRace.name,
+      country: selectedRace.country,
+      date: selectedRace.date,
+    }),
+    [
+      selectedRace.country,
+      selectedRace.date,
+      selectedRace.name,
+      selectedRace.round,
+      selectedRace.slug,
+    ],
+  );
+
   const liveFeedSocket = useLiveRaceFeedSocket({
     enabled: isDemoRound,
     events: demoLiveEvents,
+    race: liveRaceContext,
     wsUrl: process.env.NEXT_PUBLIC_WEBSOCKET_URL,
     sendIntervalMs: 4000,
   });
@@ -93,6 +123,7 @@ export function HomePageClient() {
               liveTranscript={liveFeedSocket.latestTranscript}
               liveAudioUrl={liveFeedSocket.latestAudioUrl}
               liveLastError={liveFeedSocket.lastError}
+              showDemoCommentaryPanel={isHydrated && isDemoRound}
             />
             <LeaderboardPanel leaderboard={leaderboard} />
           </section>

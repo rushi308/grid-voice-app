@@ -1,5 +1,9 @@
 import type { APIGatewayProxyWebsocketEventV2 } from "aws-lambda";
-import type { LiveRaceFeedEvent, WsCommentaryRequest } from "@grid-voice/types";
+import type {
+  LiveRaceFeedEvent,
+  WsCommentaryRequest,
+  WsRaceContext,
+} from "@grid-voice/types";
 import { WebSocketEventParser } from "../adapters/inbound/WebSocketEventParser.js";
 import { OpenAiCommentaryGenerator } from "../adapters/outbound/CommentaryGenerator.js";
 import { OpenAiS3SpeechSynthesizer } from "../adapters/outbound/OpenAiS3SpeechSynthesizer.js";
@@ -63,8 +67,12 @@ export const handler = async (
 
   if (routeKey === "SendData") {
     try {
-      const liveEvent = parser.parseSendDataEvent(event);
-      const generatedRequest = buildCommentaryRequestFromLiveEvent(liveEvent);
+      const envelope = parser.parseSendDataEnvelope(event);
+      const liveEvent = envelope.payload;
+      const generatedRequest = buildCommentaryRequestFromLiveEvent(
+        liveEvent,
+        envelope.race,
+      );
       const generatedResponse =
         await generateCommentaryUseCase.execute(generatedRequest);
 
@@ -150,9 +158,12 @@ function toNumber(value: string | undefined, fallback: number): number {
 
 function buildCommentaryRequestFromLiveEvent(
   event: LiveRaceFeedEvent,
+  race?: WsRaceContext,
 ): WsCommentaryRequest {
-  const season = toNumber(process.env.LIVE_FEED_DEFAULT_SEASON, 2026);
-  const round = toNumber(process.env.LIVE_FEED_DEFAULT_ROUND, 1);
+  const season =
+    race?.season ?? toNumber(process.env.LIVE_FEED_DEFAULT_SEASON, 2026);
+  const round = race?.round ?? toNumber(process.env.LIVE_FEED_DEFAULT_ROUND, 1);
+  const raceLabel = race?.name ?? "Race";
 
   switch (event.type) {
     case "overtake":
@@ -160,7 +171,7 @@ function buildCommentaryRequestFromLiveEvent(
         season,
         round,
         driver: String(event.overtaking_driver_number),
-        event: `Overtake: ${event.overtaking_driver_number} passed ${event.overtaken_driver_number} for P${event.position}`,
+        event: `${raceLabel}: Overtake, ${event.overtaking_driver_number} passed ${event.overtaken_driver_number} for P${event.position}`,
         tone: "hyped",
         includeTelemetry: false,
       };
@@ -169,7 +180,7 @@ function buildCommentaryRequestFromLiveEvent(
         season,
         round,
         driver: "race-control",
-        event: `${event.message} (${event.flag})`,
+        event: `${raceLabel}: ${event.message} (${event.flag})`,
         tone: "technical",
         includeTelemetry: false,
       };
@@ -178,7 +189,7 @@ function buildCommentaryRequestFromLiveEvent(
         season,
         round,
         driver: "field",
-        event: `Location update for ${event.data.length} drivers`,
+        event: `${raceLabel}: Location update for ${event.data.length} drivers`,
         tone: "neutral",
         includeTelemetry: false,
       };
@@ -193,8 +204,8 @@ function buildCommentaryRequestFromLiveEvent(
             : "session",
         event:
           event.type === "event"
-            ? `Session event: ${event.event_type}`
-            : "Session update",
+            ? `${raceLabel}: Session event ${event.event_type}`
+            : `${raceLabel}: Session update`,
         tone: "neutral",
         includeTelemetry: false,
       };

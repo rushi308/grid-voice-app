@@ -17,6 +17,7 @@ type TrackStageProps = {
   liveTranscript: string | null;
   liveAudioUrl: string | null;
   liveLastError: string | null;
+  showDemoCommentaryPanel: boolean;
 };
 
 export function TrackStage({
@@ -35,6 +36,7 @@ export function TrackStage({
   liveTranscript,
   liveAudioUrl,
   liveLastError,
+  showDemoCommentaryPanel,
 }: TrackStageProps) {
   return (
     <div className="relative overflow-hidden bg-[radial-gradient(circle_at_20%_15%,#34343E_0%,#15151E_45%,#13131B_100%)] p-5 sm:p-8">
@@ -131,7 +133,7 @@ export function TrackStage({
           : "AI Insight: Tire delta suggests an undercut window in approximately 4 laps for P2-P4."}
       </div>
 
-      {isDemoRound ? (
+      {showDemoCommentaryPanel ? (
         <div className="glass-panel mt-3 rounded-sm px-4 py-3 text-sm text-[rgb(228_225_238/90%)]">
           <p className="mb-1 text-xs uppercase tracking-[0.18em] text-(--text-secondary)">
             Live Commentary Transcript
