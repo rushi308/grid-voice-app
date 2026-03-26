@@ -46,6 +46,9 @@ export interface WsCommentaryRequest {
 export interface WsCommentaryResponse {
   message: string;
   generatedAt: string;
+  audioUrl: string;
+  audioContentType: string;
+  audioExpiresAt: string;
 }
 
 export interface WsIncomingPayload {
@@ -58,8 +61,21 @@ export interface WsIncomingPayload {
   includeTelemetry?: unknown;
 }
 
-export interface CommentaryGeneratorPort {
-  generate(input: WsCommentaryRequest): Promise<WsCommentaryResponse>;
+export interface CommentaryTextGeneratorPort {
+  generateText(input: WsCommentaryRequest): Promise<string>;
+}
+
+export interface CommentaryAudioAsset {
+  audioUrl: string;
+  audioContentType: string;
+  audioExpiresAt: string;
+}
+
+export interface CommentaryAudioSynthesizerPort {
+  synthesizeAndStore(
+    input: WsCommentaryRequest,
+    commentaryText: string,
+  ): Promise<CommentaryAudioAsset>;
 }
 
 export interface DriverPointer {

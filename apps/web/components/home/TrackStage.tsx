@@ -14,6 +14,8 @@ type TrackStageProps = {
   liveSentCount: number;
   liveTotalCount: number;
   liveLastMessage: string | null;
+  liveTranscript: string | null;
+  liveAudioUrl: string | null;
   liveLastError: string | null;
 };
 
@@ -30,6 +32,8 @@ export function TrackStage({
   liveSentCount,
   liveTotalCount,
   liveLastMessage,
+  liveTranscript,
+  liveAudioUrl,
   liveLastError,
 }: TrackStageProps) {
   return (
@@ -126,6 +130,24 @@ export function TrackStage({
           ? `Live Demo Socket: ${liveSocketStatus.toUpperCase()} | Sent ${liveSentCount}/${liveTotalCount}${liveLastError ? ` | ${liveLastError}` : ""}${liveLastMessage ? ` | Last Ack ${liveLastMessage}` : ""}`
           : "AI Insight: Tire delta suggests an undercut window in approximately 4 laps for P2-P4."}
       </div>
+
+      {isDemoRound ? (
+        <div className="glass-panel mt-3 rounded-sm px-4 py-3 text-sm text-[rgb(228_225_238/90%)]">
+          <p className="mb-1 text-xs uppercase tracking-[0.18em] text-(--text-secondary)">
+            Live Commentary Transcript
+          </p>
+          <p className="min-h-6 font-medium italic text-(--signal-mint)">
+            {liveTranscript ?? "Waiting for first generated commentary..."}
+          </p>
+          <p className="mt-2 text-xs uppercase tracking-[0.16em] text-(--text-secondary)">
+            Audio{" "}
+            {liveAudioUrl ? "playing from generated URL" : "not available yet"}
+          </p>
+          {liveAudioUrl ? (
+            <audio className="mt-3 w-full" controls src={liveAudioUrl} />
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

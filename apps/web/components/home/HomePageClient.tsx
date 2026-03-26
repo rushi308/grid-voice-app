@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLiveRaceFeedSocket } from "@/hooks/useLiveRaceFeedSocket";
 import { demoLiveEvents } from "@/lib/demoLiveEvents";
 import { season2026, type RaceTrack } from "@/lib/season2026";
@@ -17,14 +17,24 @@ import { useResolvedTrackPath } from "./hooks/useResolvedTrackPath";
 
 export function HomePageClient() {
   const [selectedRace, setSelectedRace] = useState<RaceTrack>(season2026[0]);
+  const [raceStatus, setRaceStatus] = useState<"completed" | "upcoming">(
+    "upcoming",
+  );
   const { raceClock, resetRaceClock } = useRaceClock();
   const { progressMap, resetProgressMap } = useAnimatedProgressMap();
   const isDemoRound = selectedRace.slug === "demo-live-round";
   const resolvedTrackPath = useResolvedTrackPath(selectedRace);
-  const raceStatus = useMemo(
-    () => deriveRaceStatus(selectedRace.date),
-    [selectedRace.date],
-  );
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      setRaceStatus(deriveRaceStatus(selectedRace.date));
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [selectedRace.date]);
+
   const { completedSummary, completedSummaryLoading } = useCompletedRaceSummary(
     selectedRace,
     raceStatus,
@@ -80,6 +90,8 @@ export function HomePageClient() {
               liveSentCount={liveFeedSocket.sentCount}
               liveTotalCount={liveFeedSocket.totalCount}
               liveLastMessage={liveFeedSocket.latestServerMessage}
+              liveTranscript={liveFeedSocket.latestTranscript}
+              liveAudioUrl={liveFeedSocket.latestAudioUrl}
               liveLastError={liveFeedSocket.lastError}
             />
             <LeaderboardPanel leaderboard={leaderboard} />

@@ -9,11 +9,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@grid-voice/types": "*",
+    "@aws-sdk/client-s3": "^3.872.0",
+    "@aws-sdk/s3-request-presigner": "^3.872.0",
     "@aws-sdk/client-apigatewaymanagementapi": "^3.872.0",
-    "@types/aws-lambda": "^8.10.152"
+    "@grid-voice/types": "*",
+    "@types/aws-lambda": "^8.10.152",
+    "openai": "^6.33.0"
   },
   "devDependencies": {
+    "@types/node": "^22.18.6",
     "vitest": "^3.2.4"
   }
 }

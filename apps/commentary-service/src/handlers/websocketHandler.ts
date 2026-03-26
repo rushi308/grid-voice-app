@@ -1,15 +1,32 @@
 import type { APIGatewayProxyWebsocketEventV2 } from "aws-lambda";
+import type { LiveRaceFeedEvent, WsCommentaryRequest } from "@grid-voice/types";
 import { WebSocketEventParser } from "../adapters/inbound/WebSocketEventParser.js";
-import { TemplateCommentaryGenerator } from "../adapters/outbound/CommentaryGenerator.js";
+import { OpenAiCommentaryGenerator } from "../adapters/outbound/CommentaryGenerator.js";
+import { OpenAiS3SpeechSynthesizer } from "../adapters/outbound/OpenAiS3SpeechSynthesizer.js";
 import { WebSocketConnectionGateway } from "../adapters/outbound/WebSocketConnectionGateway.js";
 import { GenerateCommentaryUseCase } from "../usecases/GenerateCommentaryUseCase.js";
-import { ProcessLiveFeedEventUseCase } from "../usecases/ProcessLiveFeedEventUseCase.js";
 
 const parser = new WebSocketEventParser();
-const generateCommentaryUseCase = new GenerateCommentaryUseCase(
-  new TemplateCommentaryGenerator(),
+const openAiApiKey = getRequiredEnv("OPENAI_API_KEY");
+const audioBucketName = getRequiredEnv("GRID_VOICE_BUCKET");
+const awsRegion = getRequiredEnv("AWS_REGION");
+
+const commentaryTextGenerator = new OpenAiCommentaryGenerator(
+  openAiApiKey,
+  process.env.OPENAI_TEXT_MODEL,
 );
-const processLiveFeedEventUseCase = new ProcessLiveFeedEventUseCase();
+const speechSynthesizer = new OpenAiS3SpeechSynthesizer({
+  apiKey: openAiApiKey,
+  bucketName: audioBucketName,
+  region: awsRegion,
+  ttsModel: process.env.OPENAI_TTS_MODEL,
+  ttsVoice: process.env.OPENAI_TTS_VOICE,
+  urlTtlSeconds: toNumber(process.env.COMMENTARY_AUDIO_URL_TTL_SECONDS, 900),
+});
+const generateCommentaryUseCase = new GenerateCommentaryUseCase(
+  commentaryTextGenerator,
+  speechSynthesizer,
+);
 
 export const handler = async (
   event: APIGatewayProxyWebsocketEventV2,
@@ -47,12 +64,17 @@ export const handler = async (
   if (routeKey === "SendData") {
     try {
       const liveEvent = parser.parseSendDataEvent(event);
-      const processed = processLiveFeedEventUseCase.execute(liveEvent);
+      const generatedRequest = buildCommentaryRequestFromLiveEvent(liveEvent);
+      const generatedResponse =
+        await generateCommentaryUseCase.execute(generatedRequest);
 
       await connectionGateway.sendJson(connectionId, {
-        type: "live.event.accepted",
+        type: "commentary.generated",
         payload: {
-          ...processed,
+          source: "live-feed",
+          feedType: liveEvent.type,
+          request: generatedRequest,
+          commentary: generatedResponse,
           receivedAt: new Date().toISOString(),
         },
       });
@@ -103,3 +125,78 @@ export const handler = async (
     };
   }
 };
+
+function getRequiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
+
+function toNumber(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+function buildCommentaryRequestFromLiveEvent(
+  event: LiveRaceFeedEvent,
+): WsCommentaryRequest {
+  const season = toNumber(process.env.LIVE_FEED_DEFAULT_SEASON, 2026);
+  const round = toNumber(process.env.LIVE_FEED_DEFAULT_ROUND, 1);
+
+  switch (event.type) {
+    case "overtake":
+      return {
+        season,
+        round,
+        driver: String(event.overtaking_driver_number),
+        event: `Overtake: ${event.overtaking_driver_number} passed ${event.overtaken_driver_number} for P${event.position}`,
+        tone: "hyped",
+        includeTelemetry: false,
+      };
+    case "race_control":
+      return {
+        season,
+        round,
+        driver: "race-control",
+        event: `${event.message} (${event.flag})`,
+        tone: "technical",
+        includeTelemetry: false,
+      };
+    case "location":
+      return {
+        season,
+        round,
+        driver: "field",
+        event: `Location update for ${event.data.length} drivers`,
+        tone: "neutral",
+        includeTelemetry: false,
+      };
+    case "event":
+    default:
+      return {
+        season,
+        round,
+        driver:
+          event.type === "event" && "driver_number" in event
+            ? String(event.driver_number)
+            : "session",
+        event:
+          event.type === "event"
+            ? `Session event: ${event.event_type}`
+            : "Session update",
+        tone: "neutral",
+        includeTelemetry: false,
+      };
+  }
+}

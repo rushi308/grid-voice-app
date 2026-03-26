@@ -9,6 +9,7 @@ import { WebSocketApi, WebSocketStage } from "aws-cdk-lib/aws-apigatewayv2";
 import { WebSocketLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import { AttributeType, BillingMode, Table } from "aws-cdk-lib/aws-dynamodb";
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
+import { Bucket } from "aws-cdk-lib/aws-s3";
 import { Architecture, Runtime } from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
@@ -18,6 +19,12 @@ import { resolve } from "node:path";
 export class GridVoiceStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
+
+    const gridVoiceBucket = new Bucket(this, "GridVoiceBucket", {
+      bucketName: "grid-voice-assets",
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
 
     const websocketCommentaryHandler = new NodejsFunction(
       this,
@@ -34,6 +41,13 @@ export class GridVoiceStack extends Stack {
         memorySize: 256,
         environment: {
           NODE_OPTIONS: "--enable-source-maps",
+          GRID_VOICE_BUCKET: gridVoiceBucket.bucketName,
+          OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
+          OPENAI_TEXT_MODEL: process.env.OPENAI_TEXT_MODEL ?? "gpt-4.1-mini",
+          OPENAI_TTS_MODEL: process.env.OPENAI_TTS_MODEL ?? "gpt-4o-mini-tts",
+          OPENAI_TTS_VOICE: process.env.OPENAI_TTS_VOICE ?? "alloy",
+          COMMENTARY_AUDIO_URL_TTL_SECONDS:
+            process.env.COMMENTARY_AUDIO_URL_TTL_SECONDS ?? "900",
         },
         bundling: {
           minify: true,
@@ -42,6 +56,8 @@ export class GridVoiceStack extends Stack {
         },
       },
     );
+
+    gridVoiceBucket.grantReadWrite(websocketCommentaryHandler);
 
     const websocketApi = new WebSocketApi(this, "CommentaryWebSocketApi", {
       apiName: "grid-voice-commentary-ws",
@@ -123,6 +139,10 @@ export class GridVoiceStack extends Stack {
 
     new CfnOutput(this, "CommentaryWebSocketEndpoint", {
       value: websocketStage.url,
+    });
+
+    new CfnOutput(this, "GridVoiceBucketName", {
+      value: gridVoiceBucket.bucketName,
     });
   }
 }
