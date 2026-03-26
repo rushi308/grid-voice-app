@@ -168,14 +168,14 @@ export function useLiveRaceFeedSocket({
       }
 
       nextSendTimerRef.current = window.setTimeout(() => {
-        sendNextEvent();
+        // sendNextEvent();
       }, sendIntervalMs);
     };
 
     socket.onopen = () => {
       logSocketDebug("WebSocket connection opened.");
       setStatus("open");
-      sendNextEvent();
+      // sendNextEvent();
     };
 
     socket.onmessage = (message) => {
@@ -206,7 +206,7 @@ export function useLiveRaceFeedSocket({
         }
 
         awaitingServerRef.current = false;
-        queueNextEvent();
+        // queueNextEvent();
         return;
       }
 
@@ -219,7 +219,7 @@ export function useLiveRaceFeedSocket({
           setLastError(errorMessage);
         }
         awaitingServerRef.current = false;
-        queueNextEvent();
+        // queueNextEvent();
       }
     };
 

@@ -10,6 +10,7 @@ import { SeasonRail } from "./SeasonRail";
 import { TrackStage } from "./TrackStage";
 import { deriveRaceStatus, toRaceMetrics } from "./homeState";
 import { useAnimatedProgressMap } from "./hooks/useAnimatedProgressMap";
+import { useChinaDemoRaceData } from "./hooks/useChinaDemoRaceData";
 import { useCompletedRaceSummary } from "./hooks/useCompletedRaceSummary";
 import { useLeaderboard } from "./hooks/useLeaderboard";
 import { useRaceClock } from "./hooks/useRaceClock";
@@ -77,10 +78,25 @@ export function HomePageClient() {
     sendIntervalMs: 4000,
   });
   const leaderboard = useLeaderboard(progressMap);
-  const { currentLap, trackTemp, airTemp } = toRaceMetrics(
+  const chinaDemoData = useChinaDemoRaceData({
+    enabled: isDemoRound,
+    raceClockSeconds: raceClock,
+    totalLaps: selectedRace.laps,
+  });
+  const activeTrackPath = resolvedTrackPath;
+  const activeProgressMap = isDemoRound
+    ? (chinaDemoData.progressMap ?? progressMap)
+    : progressMap;
+  const activeLeaderboard = isDemoRound
+    ? (chinaDemoData.leaderboard ?? leaderboard)
+    : leaderboard;
+  const { currentLap: fallbackLap, trackTemp, airTemp } = toRaceMetrics(
     raceClock,
     selectedRace.laps,
   );
+  const currentLap = isDemoRound
+    ? (chinaDemoData.currentLap ?? fallbackLap)
+    : fallbackLap;
 
   const selectRace = (race: RaceTrack) => {
     setSelectedRace(race);
@@ -109,12 +125,15 @@ export function HomePageClient() {
           <section className="grid min-h-screen grid-cols-1 xl:grid-cols-[1fr_320px]">
             <TrackStage
               selectedRace={selectedRace}
-              trackPath={resolvedTrackPath}
+              trackPath={activeTrackPath}
               currentLap={currentLap}
               airTemp={airTemp}
               trackTemp={trackTemp}
-              progressMap={progressMap}
-              leaderboard={leaderboard}
+              progressMap={activeProgressMap}
+              leaderboard={activeLeaderboard}
+              driverPositions={isDemoRound ? chinaDemoData.driverPositions : null}
+              lapEndPoint={isDemoRound ? chinaDemoData.lapEndPoint : null}
+              rotateClockwiseMap={isDemoRound}
               isDemoRound={isDemoRound}
               liveSocketStatus={liveFeedSocket.status}
               liveSentCount={liveFeedSocket.sentCount}
@@ -125,7 +144,7 @@ export function HomePageClient() {
               liveLastError={liveFeedSocket.lastError}
               showDemoCommentaryPanel={isHydrated && isDemoRound}
             />
-            <LeaderboardPanel leaderboard={leaderboard} />
+            <LeaderboardPanel leaderboard={activeLeaderboard} />
           </section>
         )}
       </main>

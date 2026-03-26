@@ -4,6 +4,7 @@ export type LeaderboardRow = DriverPointer & {
   position: number;
   interval: string;
   progress: number;
+  gapToLeaderSeconds?: number;
 };
 
 export type CompletedRaceEntry = {

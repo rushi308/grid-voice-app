@@ -20,9 +20,11 @@ export const season2026: RaceTrack[] = [
     name: "Live Demo Sprint",
     country: "Demo Circuit",
     date: "2099-01-01",
-    laps: 2,
+    laps: 52,
     drsZones: 1,
     path: "M12,60 C10,42 18,28 33,23 C49,18 67,22 78,33 C89,44 89,58 79,69 C69,81 52,84 36,79 C22,74 14,68 12,60",
+    circuitGeoJsonUrl:
+      "https://raw.githubusercontent.com/bacinger/f1-circuits/master/circuits/cn-2004.geojson",
   },
   {
     round: 1,
@@ -41,7 +43,7 @@ export const season2026: RaceTrack[] = [
     slug: "china",
     name: "Chinese Grand Prix",
     country: "China",
-    date: "2026-03-15",
+    date: "2026-03-29",
     laps: 56,
     drsZones: 2,
     path: "M9,52 C9,38 20,28 36,28 C48,28 55,34 66,34 C79,34 88,24 92,33 C96,43 89,55 76,58 C62,62 52,57 40,61 C27,65 14,64 9,52",

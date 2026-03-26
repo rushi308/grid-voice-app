@@ -163,7 +163,7 @@ export const initialPointers: DriverPointer[] = [
   },
   {
     code: "VER",
-    number: 1,
+    number: 3,
     fullName: "Max Verstappen",
     team: "Red Bull Racing",
     color: "#3671C6",

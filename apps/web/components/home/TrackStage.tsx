@@ -9,6 +9,9 @@ type TrackStageProps = {
   trackTemp: number;
   progressMap: Record<string, number>;
   leaderboard: LeaderboardRow[];
+  driverPositions: Record<string, { x: number; y: number }> | null;
+  lapEndPoint: { x: number; y: number } | null;
+  rotateClockwiseMap?: boolean;
   isDemoRound: boolean;
   liveSocketStatus: string;
   liveSentCount: number;
@@ -28,6 +31,9 @@ export function TrackStage({
   trackTemp,
   progressMap,
   leaderboard,
+  driverPositions,
+  lapEndPoint,
+  rotateClockwiseMap = false,
   isDemoRound,
   liveSocketStatus,
   liveSentCount,
@@ -83,47 +89,106 @@ export function TrackStage({
             </linearGradient>
           </defs>
 
-          <path
-            d={trackPath}
-            fill="none"
-            stroke="#525567"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d={trackPath}
-            fill="none"
-            stroke="url(#trackGlow)"
-            strokeWidth="1"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {leaderboard.map((driver, index) => {
-            const duration = Math.max(20, 60 / (driver.pace * 14));
-            const phaseOffset = (progressMap[driver.code] ?? 0) * duration;
-
-            return (
-              <g key={driver.code}>
-                <circle
-                  cx="0"
-                  cy="0"
-                  r="3.2"
-                  fill="#13131B"
-                  stroke={driver.color}
-                  strokeWidth="1.8"
+          <g>
+            <path
+              d={trackPath}
+              fill="none"
+              stroke="#525567"
+              strokeWidth="5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d={trackPath}
+              fill="none"
+              stroke="url(#trackGlow)"
+              strokeWidth="1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            {lapEndPoint ? (
+              <g>
+                <line
+                  x1={lapEndPoint.x}
+                  y1={lapEndPoint.y}
+                  x2={lapEndPoint.x}
+                  y2={lapEndPoint.y - 5.5}
+                  stroke="#F6F7FB"
+                  strokeWidth="0.8"
                 />
-                <animateMotion
-                  path={trackPath}
-                  begin={`-${phaseOffset + index * 0.2}s`}
-                  dur={`${duration}s`}
-                  rotate="auto"
-                  repeatCount="indefinite"
+                <path
+                  d={`M${lapEndPoint.x},${lapEndPoint.y - 5.5} L${lapEndPoint.x + 3.4},${lapEndPoint.y - 4.4} L${lapEndPoint.x},${lapEndPoint.y - 3.2} Z`}
+                  fill="#F6F7FB"
                 />
               </g>
-            );
-          })}
+            ) : null}
+
+
+            {leaderboard.map((driver, index) => {
+              const staticPosition = driverPositions?.[driver.code];
+              if (staticPosition) {
+                return (
+                  <g
+                    key={driver.code}
+                    transform={`translate(${staticPosition.x} ${staticPosition.y})`}
+                    style={{ transition: "transform 850ms linear" }}
+                  >
+                    <circle
+                      cx="0"
+                      cy="0"
+                      r="3.2"
+                      fill="#13131B"
+                      stroke={driver.color}
+                      strokeWidth="1.8"
+                    />
+                    <text
+                      x="4"
+                      y="-4"
+                      fill={driver.color}
+                      fontSize="3.4"
+                      fontWeight="700"
+                      letterSpacing="0.04em"
+                    >
+                      {driver.code}
+                    </text>
+                  </g>
+                );
+              }
+
+              const duration = Math.max(20, 60 / (driver.pace * 14));
+              const phaseOffset = (progressMap[driver.code] ?? 0) * duration;
+
+              return (
+                <g key={driver.code}>
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="3.2"
+                    fill="#13131B"
+                    stroke={driver.color}
+                    strokeWidth="1.8"
+                  />
+                  <text
+                    x="4.2"
+                    y="-4.2"
+                    fill={driver.color}
+                    fontSize="3.4"
+                    fontWeight="700"
+                    letterSpacing="0.04em"
+                  >
+                    {driver.code}
+                  </text>
+                  <animateMotion
+                    path={trackPath}
+                    begin={`-${phaseOffset + index * 0.2}s`}
+                    dur={`${duration}s`}
+                    rotate="auto"
+                    repeatCount="indefinite"
+                  />
+                </g>
+              );
+            })}
+          </g>
         </svg>
       </div>
 
