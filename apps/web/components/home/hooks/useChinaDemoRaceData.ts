@@ -12,6 +12,7 @@ import type { LeaderboardRow } from "../types";
 const DEMO_DRIVER_NUMBERS = [12, 16, 44, 63] as const;
 const DEMO_INTERVAL_START_ISO = "2026-03-15T07:04:06.055000+00:00";
 const DEMO_LOCATION_START_ISO = "2026-03-15T06:08:59.438000+00:00";
+const DEMO_START_COUNTDOWN_SECONDS = 3;
 
 type CircuitData = {
   x: number[];
@@ -61,6 +62,7 @@ type UseChinaDemoRaceDataResult = {
   driverPositions: Record<string, DriverPosition> | null;
   currentLap: number | null;
   lapEndPoint: DriverPosition | null;
+  startCountdownValue: number | null;
 };
 
 const circuit = circuitData as CircuitData;
@@ -82,23 +84,75 @@ const minCircuitX = Math.min(...circuit.x);
 const maxCircuitX = Math.max(...circuit.x);
 const minCircuitY = Math.min(...circuit.y);
 const maxCircuitY = Math.max(...circuit.y);
+const VIEWBOX_MIN = 8;
+const VIEWBOX_MAX = 92;
+const VIEWBOX_SPAN = VIEWBOX_MAX - VIEWBOX_MIN;
+const circuitSpanX = Math.max(1, maxCircuitX - minCircuitX);
+const circuitSpanY = Math.max(1, maxCircuitY - minCircuitY);
+const circuitUniformSpan = Math.max(circuitSpanX, circuitSpanY);
+const offsetX = (circuitUniformSpan - circuitSpanX) / 2;
+const offsetY = (circuitUniformSpan - circuitSpanY) / 2;
 
+/**
+ * Normalizes a raw circuit X coordinate into SVG viewBox space (8..92).
+ *
+ * @param x - Raw telemetry X coordinate.
+ * @returns Normalized X value for SVG rendering.
+ * @example
+ * normalizeX(1234.56); // 47.2
+ */
 function normalizeX(x: number): number {
-  if (maxCircuitX === minCircuitX) {
+  if (circuitUniformSpan <= 0) {
     return 50;
   }
-  const scaled = 8 + ((x - minCircuitX) / (maxCircuitX - minCircuitX)) * 84;
-  return Math.min(92, Math.max(8, scaled));
+  const shifted = x - minCircuitX + offsetX;
+  const scaled = VIEWBOX_MIN + (shifted / circuitUniformSpan) * VIEWBOX_SPAN;
+  return Math.min(VIEWBOX_MAX, Math.max(VIEWBOX_MIN, scaled));
 }
 
+/**
+ * Normalizes a raw circuit Y coordinate into SVG viewBox space (8..92).
+ * Y is inverted so larger telemetry Y draws higher on the map.
+ *
+ * @param y - Raw telemetry Y coordinate.
+ * @returns Normalized Y value for SVG rendering.
+ * @example
+ * normalizeY(987.65); // 61.4
+ */
 function normalizeY(y: number): number {
-  if (maxCircuitY === minCircuitY) {
+  if (circuitUniformSpan <= 0) {
     return 50;
   }
-  const scaled = 92 - ((y - minCircuitY) / (maxCircuitY - minCircuitY)) * 84;
-  return Math.min(92, Math.max(8, scaled));
+  const shifted = y - minCircuitY + offsetY;
+  const scaled = VIEWBOX_MAX - (shifted / circuitUniformSpan) * VIEWBOX_SPAN;
+  return Math.min(VIEWBOX_MAX, Math.max(VIEWBOX_MIN, scaled));
 }
 
+/**
+ * Converts raw telemetry location to normalized SVG coordinates.
+ *
+ * @param location - Driver telemetry location entry.
+ * @returns Position usable by TrackStage.
+ * @example
+ * normalizeLocationPoint({ date: "...", x: 12, y: 34, z: 0, driver_number: 44 });
+ */
+function normalizeLocationPoint(location: LocationEntry): DriverPosition {
+  return {
+    x: normalizeX(location.x),
+    y: normalizeY(location.y),
+  };
+}
+
+/**
+ * Builds an SVG path string directly from circuit coordinates.
+ * This is what allows the UI to display the circuit from `circuit.json`.
+ *
+ * @param xPoints - Circuit x array from dataset.
+ * @param yPoints - Circuit y array from dataset.
+ * @returns SVG path string (M/L commands).
+ * @example
+ * toTrackPath(circuit.x, circuit.y); // "M10.2,85.1 L10.5,84.8 ..."
+ */
 function toTrackPath(xPoints: number[], yPoints: number[]): string {
   const size = Math.min(xPoints.length, yPoints.length);
   if (size === 0) {
@@ -115,6 +169,14 @@ function toTrackPath(xPoints: number[], yPoints: number[]): string {
   return path.trim();
 }
 
+/**
+ * Returns a normalized point on the circuit polyline for progress [0..1].
+ *
+ * @param progress - Relative progress around the lap.
+ * @returns Normalized screen point for the circuit.
+ * @example
+ * getCircuitPointAtProgress(0.25); // { x: 42.3, y: 70.8 }
+ */
 function getCircuitPointAtProgress(progress: number): { x: number; y: number } {
   const size = Math.min(circuit.x.length, circuit.y.length);
   if (size === 0) {
@@ -136,31 +198,27 @@ function getCircuitPointAtProgress(progress: number): { x: number; y: number } {
   };
 }
 
-function getNearestCircuitProgress(location: LocationEntry): number {
-  const size = Math.min(circuit.x.length, circuit.y.length);
-  if (size <= 1) {
-    return 0;
-  }
-
-  let closestIndex = 0;
-  let closestDistance = Number.POSITIVE_INFINITY;
-  for (let index = 0; index < size; index += 1) {
-    const dx = circuit.x[index] - location.x;
-    const dy = circuit.y[index] - location.y;
-    const distanceSquared = dx * dx + dy * dy;
-    if (distanceSquared < closestDistance) {
-      closestDistance = distanceSquared;
-      closestIndex = index;
-    }
-  }
-
-  return closestIndex / (size - 1);
-}
-
+/**
+ * Parses an ISO timestamp into epoch milliseconds.
+ *
+ * @param isoDate - ISO date string.
+ * @returns Epoch milliseconds.
+ * @example
+ * parseDateMs("2026-03-15T07:04:06.055000+00:00");
+ */
 function parseDateMs(isoDate: string): number {
   return Date.parse(isoDate);
 }
 
+/**
+ * Binary-searches for the latest entry at or before target time.
+ *
+ * @param entries - Time-ordered entries with `date`.
+ * @param targetMs - Target timestamp in epoch ms.
+ * @returns Latest matching entry or null.
+ * @example
+ * findLatestEntryAtOrBefore(intervals, Date.now());
+ */
 function findLatestEntryAtOrBefore<T extends { date: string }>(
   entries: T[],
   targetMs: number,
@@ -183,6 +241,15 @@ function findLatestEntryAtOrBefore<T extends { date: string }>(
   return resultIndex >= 0 ? entries[resultIndex] : null;
 }
 
+/**
+ * Binary-searches the latest lap record started at or before target time.
+ *
+ * @param entries - Time-sorted lap entries.
+ * @param targetMs - Target timestamp in epoch ms.
+ * @returns Latest started lap or null.
+ * @example
+ * findLatestLapAtOrBefore(driverLaps, Date.now());
+ */
 function findLatestLapAtOrBefore(entries: LapEntry[], targetMs: number): LapEntry | null {
   let low = 0;
   let high = entries.length - 1;
@@ -207,6 +274,15 @@ function findLatestLapAtOrBefore(entries: LapEntry[], targetMs: number): LapEntr
   return resultIndex >= 0 ? entries[resultIndex] : null;
 }
 
+/**
+ * Binary-searches for latest location index at or before target time.
+ *
+ * @param entries - Time-sorted location entries.
+ * @param targetMs - Target timestamp in epoch ms.
+ * @returns Matching index or -1 if not found.
+ * @example
+ * findLatestIndexAtOrBefore(locations, Date.now()); // 152
+ */
 function findLatestIndexAtOrBefore(entries: LocationEntry[], targetMs: number): number {
   let low = 0;
   let high = entries.length - 1;
@@ -226,6 +302,14 @@ function findLatestIndexAtOrBefore(entries: LocationEntry[], targetMs: number): 
   return resultIndex;
 }
 
+/**
+ * Finds the first location index that is not (0,0).
+ *
+ * @param entries - Driver location samples.
+ * @returns First non-zero index or -1.
+ * @example
+ * findFirstNonZeroIndex(driverLocations); // 8
+ */
 function findFirstNonZeroIndex(entries: LocationEntry[]): number {
   for (let index = 0; index < entries.length; index += 1) {
     if (entries[index].x !== 0 || entries[index].y !== 0) {
@@ -235,6 +319,16 @@ function findFirstNonZeroIndex(entries: LocationEntry[]): number {
   return -1;
 }
 
+/**
+ * Finds a visible location sample for rendering at target time.
+ * Falls back to first non-zero point if no earlier sample exists.
+ *
+ * @param entries - Driver location samples.
+ * @param targetMs - Active timeline timestamp.
+ * @returns Best renderable sample index or -1.
+ * @example
+ * findVisibleLocationIndex(driverLocations, Date.now()); // 305
+ */
 function findVisibleLocationIndex(entries: LocationEntry[], targetMs: number): number {
   const latestIndex = findLatestIndexAtOrBefore(entries, targetMs);
   if (latestIndex < 0) {
@@ -278,6 +372,15 @@ for (const driverNumber of DEMO_DRIVER_NUMBERS) {
   firstNonZeroLocationIndexByDriver.set(driverNumber, findFirstNonZeroIndex(entries));
 }
 
+/**
+ * Finds first index where coordinates differ from initial stable point.
+ *
+ * @param entries - Driver location samples.
+ * @param firstNonZeroIndex - First valid location index.
+ * @returns Index of first motion sample or -1.
+ * @example
+ * findFirstCoordinateChangeIndex(driverLocations, 8); // 23
+ */
 function findFirstCoordinateChangeIndex(
   entries: LocationEntry[],
   firstNonZeroIndex: number,
@@ -306,6 +409,31 @@ for (const driverNumber of DEMO_DRIVER_NUMBERS) {
   );
 }
 
+const motionStartTimestampMsByDriver = new Map<number, number>();
+for (const driverNumber of DEMO_DRIVER_NUMBERS) {
+  const entries = locationsByDriverNumber[driverNumber] ?? [];
+  const firstNonZeroIndex = firstNonZeroLocationIndexByDriver.get(driverNumber) ?? -1;
+  const firstCoordinateChangeIndex =
+    firstCoordinateChangeIndexByDriver.get(driverNumber) ?? -1;
+  const effectiveStartIndex =
+    firstCoordinateChangeIndex >= 0 ? firstCoordinateChangeIndex : firstNonZeroIndex;
+  if (effectiveStartIndex < 0 || effectiveStartIndex >= entries.length) {
+    continue;
+  }
+
+  const startMs = parseDateMs(entries[effectiveStartIndex].date);
+  if (!Number.isNaN(startMs)) {
+    motionStartTimestampMsByDriver.set(driverNumber, startMs);
+  }
+}
+
+/**
+ * Computes global replay start timestamp from earliest driver motion sample.
+ *
+ * @returns Earliest motion timestamp in epoch ms, or NaN.
+ * @example
+ * findLocationTimelineStartMs(); // 1773554939438
+ */
 function findLocationTimelineStartMs(): number {
   let earliest = Number.POSITIVE_INFINITY;
   for (const driverNumber of DEMO_DRIVER_NUMBERS) {
@@ -327,38 +455,36 @@ function findLocationTimelineStartMs(): number {
 
 const locationTimelineStartMs = findLocationTimelineStartMs();
 
+/**
+ * Resolves finish/start marker from first circuit point in `circuit.json`.
+ *
+ * @returns Marker position in normalized SVG coordinates.
+ * @example
+ * resolveFinishLinePoint(); // { x: 13.4, y: 81.2 }
+ */
 function resolveFinishLinePoint(): DriverPosition {
-  const times = circuit.trackPositionTime ?? [];
   const xPoints = circuit.x;
   const yPoints = circuit.y;
-  const startSessionTime = circuit.candidateLap?.lapStartSessionTime;
-
-  if (
-    typeof startSessionTime !== "number" ||
-    times.length === 0 ||
-    xPoints.length === 0 ||
-    yPoints.length === 0
-  ) {
+  if (xPoints.length === 0 || yPoints.length === 0) {
     return getCircuitPointAtProgress(0);
   }
 
-  let closestIndex = 0;
-  let closestDelta = Number.POSITIVE_INFINITY;
-  for (let index = 0; index < times.length; index += 1) {
-    const delta = Math.abs(times[index] - startSessionTime);
-    if (delta < closestDelta) {
-      closestDelta = delta;
-      closestIndex = index;
-    }
-  }
-
-  const safeIndex = Math.min(closestIndex, xPoints.length - 1, yPoints.length - 1);
+  const safeIndex = 0;
   return {
     x: normalizeX(xPoints[safeIndex]),
     y: normalizeY(yPoints[safeIndex]),
   };
 }
-
+/**
+ * Builds demo replay state from China dataset (`circuit.json`, `interval.json`, locations, laps).
+ *
+ * @param args.enabled - Whether demo dataset should drive UI.
+ * @param args.raceClockSeconds - Global UI race clock in seconds.
+ * @param args.totalLaps - Configured race lap count.
+ * @returns Derived track path, leaderboard, positions, lap marker, and countdown state.
+ * @example
+ * const demo = useChinaDemoRaceData({ enabled: true, raceClockSeconds: 12, totalLaps: 56 });
+ */
 export function useChinaDemoRaceData({
   enabled,
   raceClockSeconds,
@@ -378,11 +504,19 @@ export function useChinaDemoRaceData({
         driverPositions: null,
         currentLap: null,
         lapEndPoint: null,
+        startCountdownValue: null,
       };
     }
 
-    const activeMs = locationTimelineStartMs + raceClockSeconds * 1000;
-    const activeIntervalMs = intervalStartMs + raceClockSeconds * 1000;
+    const raceRuntimeSeconds = Math.max(0, raceClockSeconds - DEMO_START_COUNTDOWN_SECONDS);
+    const activeIntervalMs = intervalStartMs + raceRuntimeSeconds * 1000;
+    const startCountdownValue =
+      raceClockSeconds < DEMO_START_COUNTDOWN_SECONDS
+        ? DEMO_START_COUNTDOWN_SECONDS - raceClockSeconds
+        : null;
+    const lapEndPoint = resolveFinishLinePoint();
+    const commonStartPoint = lapEndPoint;
+    const raceStarted = startCountdownValue === null;
     const trackPath = toTrackPath(circuit.x, circuit.y);
 
     const progressMap: Record<string, number> = {};
@@ -396,8 +530,13 @@ export function useChinaDemoRaceData({
       }
 
       const locationSeries = locationsByDriverNumber[driverNumber] ?? [];
-      const locationIndex = findVisibleLocationIndex(locationSeries, activeMs);
-      if (locationIndex >= 0) {
+      const driverMotionStartMs =
+        motionStartTimestampMsByDriver.get(driverNumber) ?? locationTimelineStartMs;
+      const driverActiveMs = driverMotionStartMs + raceRuntimeSeconds * 1000;
+      const locationIndex = raceStarted
+        ? findVisibleLocationIndex(locationSeries, driverActiveMs)
+        : -1;
+      if (raceStarted && locationIndex >= 0) {
         const firstNonZeroIndex = firstNonZeroLocationIndexByDriver.get(driverNumber) ?? 0;
         const firstCoordinateChangeIndex =
           firstCoordinateChangeIndexByDriver.get(driverNumber) ?? -1;
@@ -411,19 +550,14 @@ export function useChinaDemoRaceData({
           Math.max(0, (effectiveIndex - effectiveStartIndex) / indexSpan),
         );
 
-        const locationPoint = locationSeries[locationIndex];
-        const nearestProgress = getNearestCircuitProgress(locationPoint);
-        const progress =
-          locationIndex < effectiveStartIndex
-            ? 0
-            : nearestProgress > indexProgress
-              ? nearestProgress
-              : indexProgress;
+        // Use index-based progress for launch continuity so cars move out of
+        // lapEndPoint smoothly instead of snapping to a projected next-corner point.
+        const progress = locationIndex < effectiveStartIndex ? 0 : indexProgress;
         progressMap[driver.code] = progress;
-        baseDriverPositions[driver.code] = getCircuitPointAtProgress(progress);
+        baseDriverPositions[driver.code] = normalizeLocationPoint(locationSeries[locationIndex]);
       } else {
         progressMap[driver.code] = 0;
-        baseDriverPositions[driver.code] = getCircuitPointAtProgress(0);
+        baseDriverPositions[driver.code] = commonStartPoint;
       }
 
       const intervalSeries = intervalEntriesByDriver.get(driverNumber) ?? [];
@@ -454,7 +588,8 @@ export function useChinaDemoRaceData({
     const rankedRows = leaderboardRows.map((row, index) => ({
       ...row,
       position: index + 1,
-      interval: index === 0 ? "LEADER" : row.interval,
+      interval:
+        startCountdownValue !== null ? "STARTING" : index === 0 ? "LEADER" : row.interval,
     }));
 
     const driverPositions: Record<string, DriverPosition> = {};
@@ -465,17 +600,17 @@ export function useChinaDemoRaceData({
     }
 
     const safeTotalLaps = Math.max(1, totalLaps);
-    const leaderCode = rankedRows[0]?.code;
-    const leaderPointer = initialPointers.find((item) => item.code === leaderCode);
-    const leaderLapSeries = leaderPointer
-      ? (lapEntriesByDriver.get(leaderPointer.number) ?? [])
-      : [];
-    const leaderLapEntry = findLatestLapAtOrBefore(leaderLapSeries, activeIntervalMs);
-    const currentLap = Math.min(
-      safeTotalLaps,
-      Math.max(1, leaderLapEntry?.lap_number ?? 1),
-    );
-    const lapEndPoint = resolveFinishLinePoint();
+    const currentLap = raceStarted
+      ? (() => {
+          const leaderCode = rankedRows[0]?.code;
+          const leaderPointer = initialPointers.find((item) => item.code === leaderCode);
+          const leaderLapSeries = leaderPointer
+            ? (lapEntriesByDriver.get(leaderPointer.number) ?? [])
+            : [];
+          const leaderLapEntry = findLatestLapAtOrBefore(leaderLapSeries, activeIntervalMs);
+          return Math.min(safeTotalLaps, Math.max(1, leaderLapEntry?.lap_number ?? 1));
+        })()
+      : 1;
 
     return {
       trackPath,
@@ -484,6 +619,7 @@ export function useChinaDemoRaceData({
       driverPositions,
       currentLap,
       lapEndPoint,
+      startCountdownValue,
     };
   }, [enabled, raceClockSeconds, totalLaps]);
 }

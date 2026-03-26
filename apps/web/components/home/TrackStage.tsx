@@ -11,7 +11,6 @@ type TrackStageProps = {
   leaderboard: LeaderboardRow[];
   driverPositions: Record<string, { x: number; y: number }> | null;
   lapEndPoint: { x: number; y: number } | null;
-  rotateClockwiseMap?: boolean;
   isDemoRound: boolean;
   liveSocketStatus: string;
   liveSentCount: number;
@@ -21,6 +20,8 @@ type TrackStageProps = {
   liveAudioUrl: string | null;
   liveLastError: string | null;
   showDemoCommentaryPanel: boolean;
+  startCountdownValue: number | null;
+  trackRotationDegrees?: number;
 };
 
 export function TrackStage({
@@ -33,7 +34,6 @@ export function TrackStage({
   leaderboard,
   driverPositions,
   lapEndPoint,
-  rotateClockwiseMap = false,
   isDemoRound,
   liveSocketStatus,
   liveSentCount,
@@ -43,6 +43,8 @@ export function TrackStage({
   liveAudioUrl,
   liveLastError,
   showDemoCommentaryPanel,
+  startCountdownValue,
+  trackRotationDegrees = 0,
 }: TrackStageProps) {
   return (
     <div className="relative overflow-hidden bg-[radial-gradient(circle_at_20%_15%,#34343E_0%,#15151E_45%,#13131B_100%)] p-5 sm:p-8">
@@ -89,7 +91,7 @@ export function TrackStage({
             </linearGradient>
           </defs>
 
-          <g>
+          <g transform={`rotate(${trackRotationDegrees} 50 50)`}>
             <path
               d={trackPath}
               fill="none"
@@ -190,6 +192,18 @@ export function TrackStage({
             })}
           </g>
         </svg>
+        {isDemoRound && startCountdownValue !== null ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="rounded-sm border border-[rgb(175_178_195/25%)] bg-[rgb(19_19_27/82%)] px-6 py-4 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-(--text-secondary)">
+                Race Starts In
+              </p>
+              <p className="font-headline text-5xl font-black italic text-(--signal-mint)">
+                {startCountdownValue}
+              </p>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="glass-panel mt-6 rounded-sm px-4 py-3 text-sm italic text-[rgb(228_225_238/84%)]">

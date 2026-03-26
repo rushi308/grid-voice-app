@@ -83,7 +83,9 @@ export function HomePageClient() {
     raceClockSeconds: raceClock,
     totalLaps: selectedRace.laps,
   });
-  const activeTrackPath = resolvedTrackPath;
+  const activeTrackPath = isDemoRound
+    ? (chinaDemoData.trackPath ?? resolvedTrackPath)
+    : resolvedTrackPath;
   const activeProgressMap = isDemoRound
     ? (chinaDemoData.progressMap ?? progressMap)
     : progressMap;
@@ -133,7 +135,6 @@ export function HomePageClient() {
               leaderboard={activeLeaderboard}
               driverPositions={isDemoRound ? chinaDemoData.driverPositions : null}
               lapEndPoint={isDemoRound ? chinaDemoData.lapEndPoint : null}
-              rotateClockwiseMap={isDemoRound}
               isDemoRound={isDemoRound}
               liveSocketStatus={liveFeedSocket.status}
               liveSentCount={liveFeedSocket.sentCount}
@@ -143,6 +144,10 @@ export function HomePageClient() {
               liveAudioUrl={liveFeedSocket.latestAudioUrl}
               liveLastError={liveFeedSocket.lastError}
               showDemoCommentaryPanel={isHydrated && isDemoRound}
+              startCountdownValue={
+                isDemoRound ? (chinaDemoData.startCountdownValue ?? null) : null
+              }
+              trackRotationDegrees={isDemoRound ? 120 : 0}
             />
             <LeaderboardPanel leaderboard={activeLeaderboard} />
           </section>

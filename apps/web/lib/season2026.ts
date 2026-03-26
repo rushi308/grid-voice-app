@@ -23,8 +23,8 @@ export const season2026: RaceTrack[] = [
     laps: 52,
     drsZones: 1,
     path: "M12,60 C10,42 18,28 33,23 C49,18 67,22 78,33 C89,44 89,58 79,69 C69,81 52,84 36,79 C22,74 14,68 12,60",
-    circuitGeoJsonUrl:
-      "https://raw.githubusercontent.com/bacinger/f1-circuits/master/circuits/cn-2004.geojson",
+    // circuitGeoJsonUrl:
+    //   "https://raw.githubusercontent.com/bacinger/f1-circuits/master/circuits/cn-2004.geojson",
   },
   {
     round: 1,
