@@ -12,6 +12,7 @@ import type { LeaderboardRow } from "../types";
 const DEMO_DRIVER_NUMBERS = [12, 16, 44, 63] as const;
 const DEMO_INTERVAL_START_ISO = "2026-03-15T07:04:06.055000+00:00";
 const DEMO_START_COUNTDOWN_SECONDS = 3;
+const DEMO_START_TRANSITION_SUPPRESS_SECONDS = 2;
 
 type CircuitData = {
   x: number[];
@@ -60,8 +61,10 @@ type UseChinaDemoRaceDataResult = {
   leaderboard: LeaderboardRow[] | null;
   driverPositions: Record<string, DriverPosition> | null;
   currentLap: number | null;
+  startPoint: DriverPosition | null;
   lapEndPoint: DriverPosition | null;
   startCountdownValue: number | null;
+  suppressPositionTransition: boolean;
 };
 
 const circuit = circuitData as CircuitData;
@@ -168,6 +171,66 @@ function normalizeLocationPoint(location: LocationEntry): DriverPosition {
     x: normalizeX(location.x),
     y: normalizeY(location.y),
   };
+}
+
+const normalizedCircuitPoints: DriverPosition[] = (() => {
+  const size = Math.min(circuit.x.length, circuit.y.length);
+  const points: DriverPosition[] = [];
+  for (let index = 0; index < size; index += 1) {
+    points.push({
+      x: normalizeX(circuit.x[index]),
+      y: normalizeY(circuit.y[index]),
+    });
+  }
+  return points;
+})();
+
+function projectPointToTrack(point: DriverPosition): DriverPosition {
+  if (normalizedCircuitPoints.length === 0) {
+    return point;
+  }
+
+  if (normalizedCircuitPoints.length === 1) {
+    return normalizedCircuitPoints[0];
+  }
+
+  let bestPoint = normalizedCircuitPoints[0];
+  let bestDistanceSquared = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < normalizedCircuitPoints.length - 1; index += 1) {
+    const a = normalizedCircuitPoints[index];
+    const b = normalizedCircuitPoints[index + 1];
+    const abx = b.x - a.x;
+    const aby = b.y - a.y;
+    const abLengthSquared = abx * abx + aby * aby;
+
+    const t =
+      abLengthSquared <= 0
+        ? 0
+        : Math.min(
+            1,
+            Math.max(
+              0,
+              ((point.x - a.x) * abx + (point.y - a.y) * aby) / abLengthSquared,
+            ),
+          );
+
+    const projected = {
+      x: a.x + abx * t,
+      y: a.y + aby * t,
+    };
+
+    const dx = point.x - projected.x;
+    const dy = point.y - projected.y;
+    const distanceSquared = dx * dx + dy * dy;
+
+    if (distanceSquared < bestDistanceSquared) {
+      bestDistanceSquared = distanceSquared;
+      bestPoint = projected;
+    }
+  }
+
+  return bestPoint;
 }
 
 /**
@@ -452,6 +515,64 @@ for (const driverNumber of DEMO_DRIVER_NUMBERS) {
   );
 }
 
+const firstMovingPositionByDriver = new Map<number, DriverPosition>();
+for (const driverNumber of DEMO_DRIVER_NUMBERS) {
+  const entries = locationsByDriverNumber[driverNumber] ?? [];
+  const firstNonZeroIndex =
+    firstNonZeroLocationIndexByDriver.get(driverNumber) ?? -1;
+  const firstCoordinateChangeIndex =
+    firstCoordinateChangeIndexByDriver.get(driverNumber) ?? -1;
+  const firstMovingIndex =
+    firstCoordinateChangeIndex >= 0
+      ? firstCoordinateChangeIndex
+      : firstNonZeroIndex;
+
+  if (firstMovingIndex < 0 || firstMovingIndex >= entries.length) {
+    continue;
+  }
+
+  firstMovingPositionByDriver.set(
+    driverNumber,
+    projectPointToTrack(normalizeLocationPoint(entries[firstMovingIndex])),
+  );
+}
+
+/**
+ * Resolves race launch point from first moving telemetry samples.
+ * Uses centroid of first moving point for each demo driver.
+ */
+function resolveRaceStartPoint(): DriverPosition {
+  const movingPoints: DriverPosition[] = [];
+
+  for (const driverNumber of DEMO_DRIVER_NUMBERS) {
+    const entries = locationsByDriverNumber[driverNumber] ?? [];
+    const firstNonZeroIndex =
+      firstNonZeroLocationIndexByDriver.get(driverNumber) ?? -1;
+    const firstMovingIndex =
+      firstCoordinateChangeIndexByDriver.get(driverNumber) ?? -1;
+    const index = firstMovingIndex >= 0 ? firstMovingIndex : firstNonZeroIndex;
+
+    if (index < 0 || index >= entries.length) {
+      continue;
+    }
+
+    movingPoints.push(
+      projectPointToTrack(normalizeLocationPoint(entries[index])),
+    );
+  }
+
+  if (!movingPoints.length) {
+    return resolveFinishLinePoint();
+  }
+
+  const x =
+    movingPoints.reduce((sum, point) => sum + point.x, 0) / movingPoints.length;
+  const y =
+    movingPoints.reduce((sum, point) => sum + point.y, 0) / movingPoints.length;
+
+  return { x, y };
+}
+
 /**
  * Resolves finish/start marker from first circuit point in `circuit.json`.
  *
@@ -500,8 +621,10 @@ export function useChinaDemoRaceData({
         leaderboard: null,
         driverPositions: null,
         currentLap: null,
+        startPoint: null,
         lapEndPoint: null,
         startCountdownValue: null,
+        suppressPositionTransition: false,
       };
     }
 
@@ -514,9 +637,13 @@ export function useChinaDemoRaceData({
       raceClockSeconds < DEMO_START_COUNTDOWN_SECONDS
         ? DEMO_START_COUNTDOWN_SECONDS - raceClockSeconds
         : null;
+    const startPoint = resolveRaceStartPoint();
     const lapEndPoint = resolveFinishLinePoint();
-    const commonStartPoint = lapEndPoint;
+    const commonStartPoint = startPoint;
     const raceStarted = startCountdownValue === null;
+    const suppressPositionTransition =
+      raceStarted &&
+      raceRuntimeSeconds < DEMO_START_TRANSITION_SUPPRESS_SECONDS;
     const trackPath = toTrackPath(circuit.x, circuit.y);
 
     const progressMap: Record<string, number> = {};
@@ -529,12 +656,21 @@ export function useChinaDemoRaceData({
         continue;
       }
 
+      const firstMovingPoint =
+        firstMovingPositionByDriver.get(driverNumber) ?? commonStartPoint;
+
       const locationSeries = locationsByDriverNumber[driverNumber] ?? [];
       const driverActiveMs = activeIntervalMs;
       const locationIndex = raceStarted
         ? findVisibleLocationIndex(locationSeries, driverActiveMs)
         : -1;
-      if (raceStarted && locationIndex >= 0) {
+      if (
+        raceStarted &&
+        raceRuntimeSeconds < DEMO_START_TRANSITION_SUPPRESS_SECONDS
+      ) {
+        progressMap[driver.code] = 0;
+        baseDriverPositions[driver.code] = firstMovingPoint;
+      } else if (raceStarted && locationIndex >= 0) {
         const firstNonZeroIndex =
           firstNonZeroLocationIndexByDriver.get(driverNumber) ?? 0;
         const firstCoordinateChangeIndex =
@@ -558,13 +694,17 @@ export function useChinaDemoRaceData({
         // lapEndPoint smoothly instead of snapping to a projected next-corner point.
         const progress =
           locationIndex < effectiveStartIndex ? 0 : indexProgress;
+        const renderIndex =
+          locationIndex < effectiveStartIndex
+            ? effectiveStartIndex
+            : locationIndex;
         progressMap[driver.code] = progress;
-        baseDriverPositions[driver.code] = normalizeLocationPoint(
-          locationSeries[locationIndex],
+        baseDriverPositions[driver.code] = projectPointToTrack(
+          normalizeLocationPoint(locationSeries[renderIndex]),
         );
       } else {
         progressMap[driver.code] = 0;
-        baseDriverPositions[driver.code] = commonStartPoint;
+        baseDriverPositions[driver.code] = firstMovingPoint;
       }
 
       const intervalSeries = intervalEntriesByDriver.get(driverNumber) ?? [];
@@ -611,7 +751,7 @@ export function useChinaDemoRaceData({
       const row = rankedRows[index];
       const basePoint =
         baseDriverPositions[row.code] ?? getCircuitPointAtProgress(0);
-      driverPositions[row.code] = basePoint;
+      driverPositions[row.code] = projectPointToTrack(basePoint);
     }
 
     const safeTotalLaps = Math.max(1, totalLaps);
@@ -641,8 +781,10 @@ export function useChinaDemoRaceData({
       leaderboard: rankedRows,
       driverPositions,
       currentLap,
+      startPoint,
       lapEndPoint,
       startCountdownValue,
+      suppressPositionTransition,
     };
   }, [enabled, raceClockSeconds, totalLaps]);
 }

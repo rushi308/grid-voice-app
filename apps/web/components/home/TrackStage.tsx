@@ -10,6 +10,7 @@ type TrackStageProps = {
   progressMap: Record<string, number>;
   leaderboard: LeaderboardRow[];
   driverPositions: Record<string, { x: number; y: number }> | null;
+  startPoint: { x: number; y: number } | null;
   lapEndPoint: { x: number; y: number } | null;
   isDemoRound: boolean;
   liveSocketStatus: string;
@@ -22,6 +23,7 @@ type TrackStageProps = {
   showDemoCommentaryPanel: boolean;
   isHydrated: boolean;
   startCountdownValue: number | null;
+  suppressDriverTransition: boolean;
   trackRotationDegrees?: number;
 };
 
@@ -34,6 +36,7 @@ export function TrackStage({
   progressMap,
   leaderboard,
   driverPositions,
+  startPoint,
   lapEndPoint,
   isDemoRound,
   liveSocketStatus,
@@ -46,12 +49,15 @@ export function TrackStage({
   showDemoCommentaryPanel,
   isHydrated,
   startCountdownValue,
+  suppressDriverTransition,
   trackRotationDegrees = 0,
 }: TrackStageProps) {
   const liveStatusText =
     isDemoRound || liveSocketStatus !== "idle"
       ? `Live Feed: ${liveSocketStatus.toUpperCase()} | Events ${liveSentCount}/${liveTotalCount}${liveLastError ? ` | ${liveLastError}` : ""}${liveLastMessage ? ` | Last Ack ${liveLastMessage}` : ""}`
       : "AI Insight: Tire delta suggests an undercut window in approximately 4 laps for P2-P4.";
+  const startLabelOnLeft = (startPoint?.x ?? 0) > 74;
+  const lapLabelOnLeft = (lapEndPoint?.x ?? 0) > 74;
 
   return (
     <div className="relative overflow-hidden bg-[radial-gradient(circle_at_20%_15%,#34343E_0%,#15151E_45%,#13131B_100%)] p-5 sm:p-8">
@@ -115,6 +121,39 @@ export function TrackStage({
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+            {startPoint ? (
+              <g>
+                <circle
+                  cx={startPoint.x}
+                  cy={startPoint.y}
+                  r="1.9"
+                  fill="#00E9C7"
+                  stroke="#13131B"
+                  strokeWidth="0.7"
+                />
+                <circle
+                  cx={startPoint.x}
+                  cy={startPoint.y}
+                  r="3.1"
+                  fill="none"
+                  stroke="#00E9C7"
+                  strokeOpacity="0.55"
+                  strokeWidth="0.6"
+                />
+                <text
+                  x={startPoint.x + (startLabelOnLeft ? -3.8 : 3.8)}
+                  y={startPoint.y - 2.6}
+                  fill="#00E9C7"
+                  fontSize="2.1"
+                  fontWeight="700"
+                  letterSpacing="0.08em"
+                  textAnchor={startLabelOnLeft ? "end" : "start"}
+                >
+                  START
+                </text>
+              </g>
+            ) : null}
+
             {lapEndPoint ? (
               <g>
                 <line
@@ -129,6 +168,17 @@ export function TrackStage({
                   d={`M${lapEndPoint.x},${lapEndPoint.y - 5.5} L${lapEndPoint.x + 3.4},${lapEndPoint.y - 4.4} L${lapEndPoint.x},${lapEndPoint.y - 3.2} Z`}
                   fill="#F6F7FB"
                 />
+                <text
+                  x={lapEndPoint.x + (lapLabelOnLeft ? -4.4 : 4.4)}
+                  y={lapEndPoint.y - 5.1}
+                  fill="#F6F7FB"
+                  fontSize="2.1"
+                  fontWeight="700"
+                  letterSpacing="0.08em"
+                  textAnchor={lapLabelOnLeft ? "end" : "start"}
+                >
+                  S/F
+                </text>
               </g>
             ) : null}
 
@@ -139,7 +189,12 @@ export function TrackStage({
                   <g
                     key={driver.code}
                     transform={`translate(${staticPosition.x} ${staticPosition.y})`}
-                    style={{ transition: "transform 850ms linear" }}
+                    style={{
+                      transition:
+                        isDemoRound || suppressDriverTransition
+                          ? "none"
+                          : "transform 850ms linear",
+                    }}
                   >
                     <circle
                       cx="0"

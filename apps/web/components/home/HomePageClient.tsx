@@ -113,6 +113,7 @@ export function HomePageClient() {
     : isJapanRound
       ? (openF1MqttData.currentLap ?? fallbackLap)
       : fallbackLap;
+  const renderedTrackPath = isHydrated ? activeTrackPath : selectedRace.path;
 
   const selectRace = (race: RaceTrack) => {
     setSelectedRace(race);
@@ -141,7 +142,7 @@ export function HomePageClient() {
           <section className="grid min-h-screen grid-cols-1 xl:grid-cols-[1fr_320px]">
             <TrackStage
               selectedRace={selectedRace}
-              trackPath={activeTrackPath}
+              trackPath={renderedTrackPath}
               currentLap={currentLap}
               airTemp={airTemp}
               trackTemp={trackTemp}
@@ -154,6 +155,7 @@ export function HomePageClient() {
                     ? openF1MqttData.driverPositions
                     : null
               }
+              startPoint={useHydratedDemoData ? chinaDemoData.startPoint : null}
               lapEndPoint={
                 useHydratedDemoData ? chinaDemoData.lapEndPoint : null
               }
@@ -189,6 +191,11 @@ export function HomePageClient() {
                 useHydratedDemoData
                   ? (chinaDemoData.startCountdownValue ?? null)
                   : null
+              }
+              suppressDriverTransition={
+                useHydratedDemoData
+                  ? chinaDemoData.suppressPositionTransition
+                  : false
               }
               trackRotationDegrees={isDemoRound ? 120 : 0}
             />
