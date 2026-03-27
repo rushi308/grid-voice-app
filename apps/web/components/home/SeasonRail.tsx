@@ -1,10 +1,24 @@
-import type { RaceTrack } from "@/lib/season2026";
+import type { RaceTrack } from "@grid-voice/types";
 
 type SeasonRailProps = {
   races: RaceTrack[];
   selectedRaceSlug: string;
   onSelectRace: (race: RaceTrack) => void;
 };
+
+function isRaceCompleted(date: string): boolean {
+  const hasExplicitTime = date.includes("T");
+  const startMs = Date.parse(date);
+
+  if (Number.isFinite(startMs)) {
+    const raceEndMs = hasExplicitTime
+      ? startMs + 4 * 60 * 60 * 1000
+      : Date.parse(`${date}T23:59:59Z`);
+    return Date.now() > raceEndMs;
+  }
+
+  return false;
+}
 
 export function SeasonRail({
   races,
@@ -34,6 +48,8 @@ export function SeasonRail({
       <div className="space-y-2">
         {races.map((race) => {
           const active = race.slug === selectedRaceSlug;
+          const completed = isRaceCompleted(race.date);
+
           return (
             <button
               type="button"
@@ -52,7 +68,7 @@ export function SeasonRail({
                 {race.name}
               </p>
               <p className="mt-1 text-[11px] uppercase tracking-widest text-[rgb(228_225_238/72%)]">
-                {race.date}
+                {completed ? "Completed" : race.date}
               </p>
             </button>
           );

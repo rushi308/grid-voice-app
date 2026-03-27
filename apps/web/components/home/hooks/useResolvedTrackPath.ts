@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
-import type { RaceTrack } from "@/lib/season2026";
+import type { RaceTrack } from "@grid-voice/types";
 import { fetchTrackPath } from "../homeState";
 
-export function useResolvedTrackPath(selectedRace: RaceTrack) {
+/**
+ * Resolves the SVG track path from OpenF1 circuit metadata first, then falls back
+ * to the static GeoJSON/source path configured for the race.
+ */
+export function useResolvedTrackPath(
+  selectedRace: RaceTrack,
+  circuitInfoUrl?: string | null,
+) {
   const [resolvedTrackPath, setResolvedTrackPath] = useState<string>(
     selectedRace.path,
   );
@@ -12,7 +19,10 @@ export function useResolvedTrackPath(selectedRace: RaceTrack) {
 
     const resolvePath = async () => {
       try {
-        const nextPath = await fetchTrackPath(selectedRace);
+        const nextPath = await fetchTrackPath({
+          ...selectedRace,
+          circuitInfoUrl: circuitInfoUrl ?? selectedRace.circuitInfoUrl,
+        });
         if (!cancelled) {
           setResolvedTrackPath(nextPath);
         }
@@ -27,7 +37,7 @@ export function useResolvedTrackPath(selectedRace: RaceTrack) {
     return () => {
       cancelled = true;
     };
-  }, [selectedRace]);
+  }, [circuitInfoUrl, selectedRace]);
 
   return resolvedTrackPath;
 }

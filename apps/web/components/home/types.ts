@@ -1,4 +1,4 @@
-import type { DriverPointer } from "@/lib/season2026";
+import type { DriverPointer } from "@grid-voice/types";
 
 export type LeaderboardRow = DriverPointer & {
   position: number;

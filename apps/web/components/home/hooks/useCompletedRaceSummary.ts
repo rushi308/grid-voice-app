@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RaceTrack } from "@/lib/season2026";
+import type { RaceTrack } from "@grid-voice/types";
 import type { CompletedRaceSummary } from "../types";
 import { fetchCompletedRaceSummary } from "../homeState";
 

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLiveRaceFeedSocket } from "@/hooks/useLiveRaceFeedSocket";
 import { demoLiveEvents } from "@/lib/demoLiveEvents";
-import { season2026, type RaceTrack } from "@/lib/season2026";
+import { season2026 } from "@/lib/season2026";
+import type { RaceTrack } from "@grid-voice/types";
 import { CompletedRaceStage } from "./CompletedRaceStage";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { SeasonRail } from "./SeasonRail";
@@ -12,11 +13,15 @@ import { deriveRaceStatus, toRaceMetrics } from "./homeState";
 import { useAnimatedProgressMap } from "./hooks/useAnimatedProgressMap";
 import { useChinaDemoRaceData } from "./hooks/useChinaDemoRaceData";
 import { useCompletedRaceSummary } from "./hooks/useCompletedRaceSummary";
+import { useEventCountdown } from "./hooks/useEventCountdown";
 import { useLeaderboard } from "./hooks/useLeaderboard";
 import { useOpenF1MqttRaceData } from "./hooks/useOpenF1MqttRaceData";
 import { useRaceClock } from "./hooks/useRaceClock";
 import { useResolvedTrackPath } from "./hooks/useResolvedTrackPath";
 
+/**
+ * Orchestrates the home race view across completed, simulated demo, and live OpenF1 states.
+ */
 export function HomePageClient() {
   const [selectedRace, setSelectedRace] = useState<RaceTrack>(season2026[0]);
   const [raceStatus, setRaceStatus] = useState<"completed" | "upcoming">(
@@ -26,9 +31,8 @@ export function HomePageClient() {
   const { raceClock, resetRaceClock } = useRaceClock();
   const { progressMap, resetProgressMap } = useAnimatedProgressMap();
   const isDemoRound = selectedRace.slug === "demo-live-round";
-  const isJapanRound = selectedRace.slug === "japan";
+  const shouldUseOpenF1Live = !isDemoRound && raceStatus === "upcoming";
   const useHydratedDemoData = isDemoRound && isHydrated;
-  const resolvedTrackPath = useResolvedTrackPath(selectedRace);
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
@@ -87,20 +91,31 @@ export function HomePageClient() {
     totalLaps: selectedRace.laps,
   });
   const openF1MqttData = useOpenF1MqttRaceData({
-    enabled: isJapanRound,
+    enabled: shouldUseOpenF1Live,
     totalLaps: selectedRace.laps,
+    raceDate: selectedRace.date,
+    circuitInfoUrl: selectedRace.circuitInfoUrl,
+    preferredSessionKey: selectedRace.sessionKey,
   });
+  const upcomingRaceCountdown = useEventCountdown({
+    targetIso: openF1MqttData.countdownTargetIso,
+    enabled: shouldUseOpenF1Live && !openF1MqttData.eventStarted,
+  });
+  const resolvedTrackPath = useResolvedTrackPath(
+    selectedRace,
+    openF1MqttData.circuitInfoUrl,
+  );
   const activeTrackPath = useHydratedDemoData
     ? (chinaDemoData.trackPath ?? resolvedTrackPath)
     : resolvedTrackPath;
   const activeProgressMap = useHydratedDemoData
     ? (chinaDemoData.progressMap ?? progressMap)
-    : isJapanRound
+    : shouldUseOpenF1Live
       ? (openF1MqttData.progressMap ?? progressMap)
       : progressMap;
   const activeLeaderboard = useHydratedDemoData
     ? (chinaDemoData.leaderboard ?? leaderboard)
-    : isJapanRound
+    : shouldUseOpenF1Live
       ? (openF1MqttData.leaderboard ?? leaderboard)
       : leaderboard;
   const {
@@ -110,7 +125,7 @@ export function HomePageClient() {
   } = toRaceMetrics(raceClock, selectedRace.laps);
   const currentLap = useHydratedDemoData
     ? (chinaDemoData.currentLap ?? fallbackLap)
-    : isJapanRound
+    : shouldUseOpenF1Live
       ? (openF1MqttData.currentLap ?? fallbackLap)
       : fallbackLap;
   const renderedTrackPath = isHydrated ? activeTrackPath : selectedRace.path;
@@ -151,7 +166,7 @@ export function HomePageClient() {
               driverPositions={
                 useHydratedDemoData
                   ? chinaDemoData.driverPositions
-                  : isJapanRound
+                  : shouldUseOpenF1Live
                     ? openF1MqttData.driverPositions
                     : null
               }
@@ -161,27 +176,31 @@ export function HomePageClient() {
               }
               isDemoRound={isDemoRound}
               liveSocketStatus={
-                isJapanRound ? openF1MqttData.status : liveFeedSocket.status
+                shouldUseOpenF1Live
+                  ? openF1MqttData.status
+                  : liveFeedSocket.status
               }
               liveSentCount={
-                isJapanRound
+                shouldUseOpenF1Live
                   ? openF1MqttData.messageCount
                   : liveFeedSocket.sentCount
               }
               liveTotalCount={
-                isJapanRound
+                shouldUseOpenF1Live
                   ? openF1MqttData.messageCount
                   : liveFeedSocket.totalCount
               }
               liveLastMessage={
-                isJapanRound ? null : liveFeedSocket.latestServerMessage
+                shouldUseOpenF1Live ? null : liveFeedSocket.latestServerMessage
               }
               liveTranscript={
-                isJapanRound ? null : liveFeedSocket.latestTranscript
+                shouldUseOpenF1Live ? null : liveFeedSocket.latestTranscript
               }
-              liveAudioUrl={isJapanRound ? null : liveFeedSocket.latestAudioUrl}
+              liveAudioUrl={
+                shouldUseOpenF1Live ? null : liveFeedSocket.latestAudioUrl
+              }
               liveLastError={
-                isJapanRound
+                shouldUseOpenF1Live
                   ? openF1MqttData.lastError
                   : liveFeedSocket.lastError
               }
@@ -190,6 +209,11 @@ export function HomePageClient() {
               startCountdownValue={
                 useHydratedDemoData
                   ? (chinaDemoData.startCountdownValue ?? null)
+                  : null
+              }
+              upcomingCountdownLabel={
+                shouldUseOpenF1Live && !openF1MqttData.eventStarted
+                  ? upcomingRaceCountdown
                   : null
               }
               suppressDriverTransition={

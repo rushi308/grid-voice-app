@@ -1,4 +1,4 @@
-import type { RaceTrack } from "@/lib/season2026";
+import type { RaceTrack } from "@grid-voice/types";
 import type { LeaderboardRow } from "./types";
 
 type TrackStageProps = {
@@ -23,10 +23,14 @@ type TrackStageProps = {
   showDemoCommentaryPanel: boolean;
   isHydrated: boolean;
   startCountdownValue: number | null;
+  upcomingCountdownLabel: string | null;
   suppressDriverTransition: boolean;
   trackRotationDegrees?: number;
 };
 
+/**
+ * Renders the main live track visualization, overlays, and live feed status panel.
+ */
 export function TrackStage({
   selectedRace,
   trackPath,
@@ -49,6 +53,7 @@ export function TrackStage({
   showDemoCommentaryPanel,
   isHydrated,
   startCountdownValue,
+  upcomingCountdownLabel,
   suppressDriverTransition,
   trackRotationDegrees = 0,
 }: TrackStageProps) {
@@ -88,10 +93,6 @@ export function TrackStage({
         <div className="glass-panel rounded-sm px-3 py-2">
           <span className="text-(--text-secondary)">Track </span>
           <strong>{trackTemp}C</strong>
-        </div>
-        <div className="glass-panel rounded-sm px-3 py-2">
-          <span className="text-(--text-secondary)">DRS </span>
-          <strong>{selectedRace.drsZones} Zones</strong>
         </div>
       </div>
 
@@ -261,6 +262,19 @@ export function TrackStage({
               </p>
               <p className="font-headline text-5xl font-black italic text-(--signal-mint)">
                 {startCountdownValue}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {!isDemoRound && upcomingCountdownLabel ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="rounded-sm border border-[rgb(175_178_195/25%)] bg-[rgb(19_19_27/82%)] px-6 py-4 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-(--text-secondary)">
+                Session Starts In
+              </p>
+              <p className="font-headline text-xl font-black italic text-(--signal-mint)">
+                {upcomingCountdownLabel}
               </p>
             </div>
           </div>

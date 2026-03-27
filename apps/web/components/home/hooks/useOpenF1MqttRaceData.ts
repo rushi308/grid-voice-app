@@ -2,20 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { initialPointers } from "@/lib/season2026";
+import type { OpenF1MqttAuthPayload } from "@grid-voice/types";
 import type { LeaderboardRow } from "../types";
 
 type DriverPosition = {
   x: number;
   y: number;
-};
-
-type MqttAuthPayload = {
-  username: string;
-  token: string;
-};
-
-type JapanSessionPayload = {
-  sessionKey: number;
 };
 
 type LocationEvent = {
@@ -44,6 +36,9 @@ type LiveRaceData = {
   leaderboard: LeaderboardRow[] | null;
   driverPositions: Record<string, DriverPosition> | null;
   currentLap: number | null;
+  eventStarted: boolean;
+  countdownTargetIso: string | null;
+  circuitInfoUrl: string | null;
   status: "idle" | "loading" | "connecting" | "open" | "error" | "closed";
   messageCount: number;
   lastError: string | null;
@@ -52,6 +47,9 @@ type LiveRaceData = {
 type UseOpenF1MqttRaceDataArgs = {
   enabled: boolean;
   totalLaps: number;
+  raceDate: string;
+  circuitInfoUrl?: string;
+  preferredSessionKey?: number;
 };
 
 const MQTT_WEBSOCKET_URL = "wss://mqtt.openf1.org:8084/mqtt";
@@ -124,15 +122,25 @@ function normalizeLocation(
   };
 }
 
+/**
+ * Streams live race telemetry from OpenF1 over MQTT once the selected event starts.
+ * Before start time, this hook only resolves meeting metadata and countdown details.
+ */
 export function useOpenF1MqttRaceData({
   enabled,
   totalLaps,
+  raceDate,
+  circuitInfoUrl,
+  preferredSessionKey,
 }: UseOpenF1MqttRaceDataArgs): LiveRaceData {
   const [state, setState] = useState<LiveRaceData>({
     progressMap: null,
     leaderboard: null,
     driverPositions: null,
     currentLap: null,
+    eventStarted: false,
+    countdownTargetIso: null,
+    circuitInfoUrl: null,
     status: "idle",
     messageCount: 0,
     lastError: null,
@@ -166,6 +174,11 @@ export function useOpenF1MqttRaceData({
     (
       status: LiveRaceData["status"],
       lastError: string | null,
+      metadata: {
+        eventStarted: boolean;
+        countdownTargetIso: string | null;
+        circuitInfoUrl: string | null;
+      },
     ): LiveRaceData => {
       const safeTotalLaps = Math.max(1, totalLaps);
       const rows: Array<
@@ -217,6 +230,9 @@ export function useOpenF1MqttRaceData({
           leaderboard: null,
           driverPositions: null,
           currentLap: null,
+          eventStarted: metadata.eventStarted,
+          countdownTargetIso: metadata.countdownTargetIso,
+          circuitInfoUrl: metadata.circuitInfoUrl,
           status,
           messageCount: messageCountRef.current,
           lastError,
@@ -273,6 +289,9 @@ export function useOpenF1MqttRaceData({
         leaderboard,
         driverPositions: Object.keys(positions).length ? positions : null,
         currentLap: leaderLap,
+        eventStarted: metadata.eventStarted,
+        countdownTargetIso: metadata.countdownTargetIso,
+        circuitInfoUrl: metadata.circuitInfoUrl,
         status,
         messageCount: messageCountRef.current,
         lastError,
@@ -288,6 +307,9 @@ export function useOpenF1MqttRaceData({
         leaderboard: null,
         driverPositions: null,
         currentLap: null,
+        eventStarted: false,
+        countdownTargetIso: null,
+        circuitInfoUrl: null,
         status: "idle",
         messageCount: 0,
         lastError: null,
@@ -298,6 +320,19 @@ export function useOpenF1MqttRaceData({
     let isCancelled = false;
 
     const bootstrap = async () => {
+      sessionKeyRef.current = null;
+      locationByDriverRef.current = new Map();
+      intervalByDriverRef.current = new Map();
+      lapByDriverRef.current = new Map();
+      messageCountRef.current = 0;
+      boundsRef.current = {
+        initialized: false,
+        minX: 0,
+        maxX: 1,
+        minY: 0,
+        maxY: 1,
+      };
+
       setState((previous) => ({
         ...previous,
         status: "loading",
@@ -305,37 +340,59 @@ export function useOpenF1MqttRaceData({
       }));
 
       try {
-        const [authResponse, sessionResponse] = await Promise.all([
-          fetch("/api/openf1/mqtt-auth", { cache: "no-store" }),
-          fetch("/api/openf1/japan-session", { cache: "no-store" }),
-        ]);
+        const raceStartMs = Date.parse(raceDate);
+        const eventStarted =
+          Number.isFinite(raceStartMs) && Date.now() >= raceStartMs;
+
+        if (!eventStarted) {
+          if (!isCancelled) {
+            setState((previous) => ({
+              ...previous,
+              progressMap: null,
+              leaderboard: null,
+              driverPositions: null,
+              currentLap: null,
+              eventStarted: false,
+              countdownTargetIso: raceDate,
+              circuitInfoUrl: circuitInfoUrl ?? null,
+              status: "idle",
+              messageCount: 0,
+              lastError: null,
+            }));
+          }
+          return undefined;
+        }
+
+        if (!preferredSessionKey) {
+          throw new Error(
+            "Missing session key for selected race.",
+          );
+        }
+
+        const authResponse = await fetch("/api/openf1/mqtt-auth", {
+          cache: "no-store",
+        });
 
         if (!authResponse.ok) {
           throw new Error("Unable to load MQTT auth credentials.");
         }
-        if (!sessionResponse.ok) {
-          throw new Error("Unable to resolve Japan session key.");
-        }
 
-        const auth = (await authResponse.json()) as MqttAuthPayload;
-        const sessionData =
-          (await sessionResponse.json()) as JapanSessionPayload;
+        const auth = (await authResponse.json()) as OpenF1MqttAuthPayload;
 
         if (!auth.username || !auth.token) {
           throw new Error("Invalid MQTT auth payload.");
-        }
-
-        if (!sessionData.sessionKey) {
-          throw new Error("Invalid Japan session payload.");
         }
 
         if (isCancelled) {
           return;
         }
 
-        sessionKeyRef.current = sessionData.sessionKey;
+        sessionKeyRef.current = preferredSessionKey;
         setState((previous) => ({
           ...previous,
+          eventStarted: true,
+          countdownTargetIso: raceDate,
+          circuitInfoUrl: circuitInfoUrl ?? null,
           status: "connecting",
         }));
 
@@ -354,8 +411,6 @@ export function useOpenF1MqttRaceData({
           protocolVersion: 5,
         });
 
-        console.log(client);
-
         const scheduleFlush = () => {
           if (flushTimerRef.current !== null) {
             return;
@@ -364,7 +419,11 @@ export function useOpenF1MqttRaceData({
           flushTimerRef.current = window.setTimeout(() => {
             flushTimerRef.current = null;
             setState((previous) => {
-              const next = buildSnapshot(previous.status, previous.lastError);
+              const next = buildSnapshot(previous.status, previous.lastError, {
+                eventStarted: previous.eventStarted,
+                countdownTargetIso: previous.countdownTargetIso,
+                circuitInfoUrl: previous.circuitInfoUrl,
+              });
               return {
                 ...next,
                 status: previous.status,
@@ -528,7 +587,7 @@ export function useOpenF1MqttRaceData({
       }
       cleanup?.();
     };
-  }, [buildSnapshot, enabled]);
+  }, [buildSnapshot, circuitInfoUrl, enabled, preferredSessionKey, raceDate]);
 
   return state;
 }

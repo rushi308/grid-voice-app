@@ -2,6 +2,35 @@ export type TrackCondition = "dry" | "damp" | "wet";
 
 export type CommentaryTone = "hype" | "analytical" | "neutral";
 
+/**
+ * Shared race metadata used by the web app for rendering season rails and live telemetry lookups.
+ */
+export interface RaceTrack {
+  round: number;
+  slug: string;
+  name: string;
+  country: string;
+  openF1CountryName?: string;
+  date: string;
+  laps: number;
+  path: string;
+  sessionKey?: number;
+  circuitInfoUrl?: string;
+  circuitGeoJsonUrl?: string;
+}
+
+export interface OpenF1LiveMeetingPayload {
+  eventStarted: boolean;
+  sessionKey: number | null;
+  dateStart: string;
+  circuitInfoUrl: string;
+}
+
+export interface OpenF1MqttAuthPayload {
+  username: string;
+  token: string;
+}
+
 export interface DriverSnapshot {
   code: string;
   position: number;
