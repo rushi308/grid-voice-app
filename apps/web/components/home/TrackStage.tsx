@@ -24,6 +24,7 @@ type TrackStageProps = {
   isHydrated: boolean;
   startCountdownValue: number | null;
   upcomingCountdownLabel: string | null;
+  isUpcomingCircuitOnly?: boolean;
   suppressDriverTransition: boolean;
   trackRotationDegrees?: number;
 };
@@ -54,6 +55,7 @@ export function TrackStage({
   isHydrated,
   startCountdownValue,
   upcomingCountdownLabel,
+  isUpcomingCircuitOnly = false,
   suppressDriverTransition,
   trackRotationDegrees = 0,
 }: TrackStageProps) {
@@ -69,32 +71,72 @@ export function TrackStage({
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-headline text-xs font-bold uppercase tracking-[0.22em] text-(--signal-mint)">
-            Live Track Session
+            {isUpcomingCircuitOnly ? "Upcoming Race" : "Live Track Session"}
           </p>
           <h1 className="font-headline text-3xl font-black italic tracking-tight sm:text-4xl">
             {selectedRace.name}
           </h1>
         </div>
-        <div className="glass-panel rounded-sm px-4 py-3">
-          <p className="text-xs uppercase tracking-[0.2em] text-(--text-secondary)">
-            Lap {currentLap} / {selectedRace.laps}
-          </p>
-          <p className="font-headline text-lg font-bold italic text-(--signal-mint)">
-            Track Clear
-          </p>
-        </div>
+        {isUpcomingCircuitOnly ? (
+          <div className="glass-panel rounded-sm px-4 py-3 text-right">
+            <p className="text-xs uppercase tracking-[0.2em] text-(--text-secondary)">
+              Round {selectedRace.round}
+            </p>
+            <p className="font-headline text-lg font-bold italic text-(--signal-mint)">
+              {selectedRace.country}
+            </p>
+          </div>
+        ) : (
+          <div className="glass-panel rounded-sm px-4 py-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-(--text-secondary)">
+              Lap {currentLap} / {selectedRace.laps}
+            </p>
+            <p className="font-headline text-lg font-bold italic text-(--signal-mint)">
+              Track Clear
+            </p>
+          </div>
+        )}
       </header>
 
-      <div className="mb-6 flex flex-wrap gap-3 text-xs uppercase tracking-widest">
-        <div className="glass-panel rounded-sm px-3 py-2">
-          <span className="text-(--text-secondary)">Air </span>
-          <strong>{airTemp}C</strong>
+      {isUpcomingCircuitOnly ? (
+        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <div className="glass-panel rounded-sm px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-(--text-secondary)">
+              Race Start
+            </p>
+            <p className="font-headline text-sm font-bold italic text-(--signal-mint)">
+              {selectedRace.date}
+            </p>
+          </div>
+          <div className="glass-panel rounded-sm px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-(--text-secondary)">
+              Total Laps
+            </p>
+            <p className="font-headline text-sm font-bold italic text-(--signal-mint)">
+              {selectedRace.laps}
+            </p>
+          </div>
+          <div className="glass-panel rounded-sm px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-(--text-secondary)">
+              Status
+            </p>
+            <p className="font-headline text-sm font-bold italic text-(--signal-mint)">
+              Circuit Preview
+            </p>
+          </div>
         </div>
-        <div className="glass-panel rounded-sm px-3 py-2">
-          <span className="text-(--text-secondary)">Track </span>
-          <strong>{trackTemp}C</strong>
+      ) : (
+        <div className="mb-6 flex flex-wrap gap-3 text-xs uppercase tracking-widest">
+          <div className="glass-panel rounded-sm px-3 py-2">
+            <span className="text-(--text-secondary)">Air </span>
+            <strong>{airTemp}C</strong>
+          </div>
+          <div className="glass-panel rounded-sm px-3 py-2">
+            <span className="text-(--text-secondary)">Track </span>
+            <strong>{trackTemp}C</strong>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="glass-panel relative h-105 rounded-sm border border-[rgb(175_178_195/20%)] p-4 sm:h-130">
         <svg viewBox="0 0 100 100" className="h-full w-full">
@@ -285,9 +327,11 @@ export function TrackStage({
         suppressHydrationWarning
         className="glass-panel mt-6 rounded-sm px-4 py-3 text-sm italic text-[rgb(228_225_238/84%)]"
       >
-        {isHydrated
-          ? liveStatusText
-          : "AI Insight: Tire delta suggests an undercut window in approximately 4 laps for P2-P4."}
+        {isUpcomingCircuitOnly
+          ? "Circuit blueprint loaded from the selected race profile. Live telemetry and race order will appear when the event starts."
+          : isHydrated
+            ? liveStatusText
+            : "AI Insight: Tire delta suggests an undercut window in approximately 4 laps for P2-P4."}
       </div>
 
       {showDemoCommentaryPanel ? (

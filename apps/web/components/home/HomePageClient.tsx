@@ -9,6 +9,8 @@ import { CompletedRaceStage } from "./CompletedRaceStage";
 import { LeaderboardPanel } from "./LeaderboardPanel";
 import { SeasonRail } from "./SeasonRail";
 import { TrackStage } from "./TrackStage";
+import { UpcomingRaceInfoPanel } from "./UpcomingRaceInfoPanel";
+import { UpcomingRaceTrackStage } from "./UpcomingRaceTrackStage";
 import { deriveRaceStatus, toRaceMetrics } from "./homeState";
 import { useAnimatedProgressMap } from "./hooks/useAnimatedProgressMap";
 import { useChinaDemoRaceData } from "./hooks/useChinaDemoRaceData";
@@ -97,6 +99,8 @@ export function HomePageClient() {
     circuitInfoUrl: selectedRace.circuitInfoUrl,
     preferredSessionKey: selectedRace.sessionKey,
   });
+  const showUpcomingCircuitOnly =
+    shouldUseOpenF1Live && !openF1MqttData.eventStarted;
   const upcomingRaceCountdown = useEventCountdown({
     targetIso: openF1MqttData.countdownTargetIso,
     enabled: shouldUseOpenF1Live && !openF1MqttData.eventStarted,
@@ -129,6 +133,8 @@ export function HomePageClient() {
       ? (openF1MqttData.currentLap ?? fallbackLap)
       : fallbackLap;
   const renderedTrackPath = isHydrated ? activeTrackPath : selectedRace.path;
+  const renderedProgressMap = showUpcomingCircuitOnly ? {} : activeProgressMap;
+  const renderedLeaderboard = showUpcomingCircuitOnly ? [] : activeLeaderboard;
 
   const selectRace = (race: RaceTrack) => {
     setSelectedRace(race);
@@ -155,75 +161,89 @@ export function HomePageClient() {
           </section>
         ) : (
           <section className="grid min-h-screen grid-cols-1 xl:grid-cols-[1fr_320px]">
-            <TrackStage
-              selectedRace={selectedRace}
-              trackPath={renderedTrackPath}
-              currentLap={currentLap}
-              airTemp={airTemp}
-              trackTemp={trackTemp}
-              progressMap={activeProgressMap}
-              leaderboard={activeLeaderboard}
-              driverPositions={
-                useHydratedDemoData
-                  ? chinaDemoData.driverPositions
-                  : shouldUseOpenF1Live
-                    ? openF1MqttData.driverPositions
-                    : null
-              }
-              startPoint={useHydratedDemoData ? chinaDemoData.startPoint : null}
-              lapEndPoint={
-                useHydratedDemoData ? chinaDemoData.lapEndPoint : null
-              }
-              isDemoRound={isDemoRound}
-              liveSocketStatus={
-                shouldUseOpenF1Live
-                  ? openF1MqttData.status
-                  : liveFeedSocket.status
-              }
-              liveSentCount={
-                shouldUseOpenF1Live
-                  ? openF1MqttData.messageCount
-                  : liveFeedSocket.sentCount
-              }
-              liveTotalCount={
-                shouldUseOpenF1Live
-                  ? openF1MqttData.messageCount
-                  : liveFeedSocket.totalCount
-              }
-              liveLastMessage={
-                shouldUseOpenF1Live ? null : liveFeedSocket.latestServerMessage
-              }
-              liveTranscript={
-                shouldUseOpenF1Live ? null : liveFeedSocket.latestTranscript
-              }
-              liveAudioUrl={
-                shouldUseOpenF1Live ? null : liveFeedSocket.latestAudioUrl
-              }
-              liveLastError={
-                shouldUseOpenF1Live
-                  ? openF1MqttData.lastError
-                  : liveFeedSocket.lastError
-              }
-              isHydrated={isHydrated}
-              showDemoCommentaryPanel={isHydrated && isDemoRound}
-              startCountdownValue={
-                useHydratedDemoData
-                  ? (chinaDemoData.startCountdownValue ?? null)
-                  : null
-              }
-              upcomingCountdownLabel={
-                shouldUseOpenF1Live && !openF1MqttData.eventStarted
-                  ? upcomingRaceCountdown
-                  : null
-              }
-              suppressDriverTransition={
-                useHydratedDemoData
-                  ? chinaDemoData.suppressPositionTransition
-                  : false
-              }
-              trackRotationDegrees={isDemoRound ? 120 : 0}
-            />
-            <LeaderboardPanel leaderboard={activeLeaderboard} />
+            {showUpcomingCircuitOnly ? (
+              <>
+                <UpcomingRaceTrackStage
+                  selectedRace={selectedRace}
+                  trackPath={renderedTrackPath}
+                  upcomingCountdownLabel={upcomingRaceCountdown}
+                />
+                <UpcomingRaceInfoPanel selectedRace={selectedRace} />
+              </>
+            ) : (
+              <>
+                <TrackStage
+                  selectedRace={selectedRace}
+                  trackPath={renderedTrackPath}
+                  currentLap={currentLap}
+                  airTemp={airTemp}
+                  trackTemp={trackTemp}
+                  progressMap={renderedProgressMap}
+                  leaderboard={renderedLeaderboard}
+                  driverPositions={
+                    useHydratedDemoData
+                      ? chinaDemoData.driverPositions
+                      : shouldUseOpenF1Live
+                        ? openF1MqttData.driverPositions
+                        : null
+                  }
+                  startPoint={
+                    useHydratedDemoData ? chinaDemoData.startPoint : null
+                  }
+                  lapEndPoint={
+                    useHydratedDemoData ? chinaDemoData.lapEndPoint : null
+                  }
+                  isDemoRound={isDemoRound}
+                  liveSocketStatus={
+                    shouldUseOpenF1Live
+                      ? openF1MqttData.status
+                      : liveFeedSocket.status
+                  }
+                  liveSentCount={
+                    shouldUseOpenF1Live
+                      ? openF1MqttData.messageCount
+                      : liveFeedSocket.sentCount
+                  }
+                  liveTotalCount={
+                    shouldUseOpenF1Live
+                      ? openF1MqttData.messageCount
+                      : liveFeedSocket.totalCount
+                  }
+                  liveLastMessage={
+                    shouldUseOpenF1Live
+                      ? null
+                      : liveFeedSocket.latestServerMessage
+                  }
+                  liveTranscript={
+                    shouldUseOpenF1Live ? null : liveFeedSocket.latestTranscript
+                  }
+                  liveAudioUrl={
+                    shouldUseOpenF1Live ? null : liveFeedSocket.latestAudioUrl
+                  }
+                  liveLastError={
+                    shouldUseOpenF1Live
+                      ? openF1MqttData.lastError
+                      : liveFeedSocket.lastError
+                  }
+                  isHydrated={isHydrated}
+                  showDemoCommentaryPanel={isHydrated && isDemoRound}
+                  startCountdownValue={
+                    useHydratedDemoData
+                      ? (chinaDemoData.startCountdownValue ?? null)
+                      : null
+                  }
+                  upcomingCountdownLabel={null}
+                  isUpcomingCircuitOnly={false}
+                  suppressDriverTransition={
+                    useHydratedDemoData
+                      ? chinaDemoData.suppressPositionTransition
+                      : false
+                  }
+                  trackRotationDegrees={isDemoRound ? 120 : 0}
+                />
+                <LeaderboardPanel leaderboard={activeLeaderboard} />
+              </>
+            )}
           </section>
         )}
       </main>

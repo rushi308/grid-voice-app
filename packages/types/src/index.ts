@@ -31,6 +31,16 @@ export interface OpenF1MqttAuthPayload {
   token: string;
 }
 
+export interface UpcomingRaceInfoPanelProps {
+  selectedRace: RaceTrack;
+}
+
+export interface UpcomingRaceTrackStageProps {
+  selectedRace: RaceTrack;
+  trackPath: string;
+  upcomingCountdownLabel: string | null;
+}
+
 export interface DriverSnapshot {
   code: string;
   position: number;

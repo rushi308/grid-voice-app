@@ -2,19 +2,14 @@ import { initialPointers } from "@/lib/season2026";
 import type { RaceTrack } from "@grid-voice/types";
 import type { CompletedRaceSummary, LeaderboardRow } from "./types";
 
-type GeoFeatureCollection = {
-  features?: Array<{
-    geometry?: {
-      type?: string;
-      coordinates?: number[][];
-    };
-  }>;
-};
-
 type OpenF1CircuitInfoResponse = {
+  x?: unknown;
+  y?: unknown;
   corners?: Array<{
-    x?: unknown;
-    y?: unknown;
+    trackPosition?: {
+      x?: unknown;
+      y?: unknown;
+    };
     number?: unknown;
   }>;
 };
@@ -183,39 +178,49 @@ export async function fetchTrackPath(race: RaceTrack): Promise<string> {
       const response = await fetch(race.circuitInfoUrl, { cache: "no-store" });
       if (response.ok) {
         const data = (await response.json()) as OpenF1CircuitInfoResponse;
+
+        const xPoints = Array.isArray(data.x)
+          ? data.x
+              .map((value) => asNumber(value))
+              .filter((value): value is number => value !== null)
+          : [];
+        const yPoints = Array.isArray(data.y)
+          ? data.y
+              .map((value) => asNumber(value))
+              .filter((value): value is number => value !== null)
+          : [];
+
+        if (xPoints.length >= 2 && xPoints.length === yPoints.length) {
+          const points = xPoints.map((x, index) => [x, yPoints[index]]);
+          const closed = [...points, points[0]];
+          const path = mapGeoCoordinatesToTrackPath(closed);
+          if (path) {
+            return path;
+          }
+        }
+
         const coordinates = (data.corners ?? [])
           .map((corner) => {
-            const x = asNumber(corner.x);
-            const y = asNumber(corner.y);
+            const x = asNumber(corner.trackPosition?.x);
+            const y = asNumber(corner.trackPosition?.y);
             return x !== null && y !== null ? [x, y] : null;
           })
           .filter((point): point is [number, number] => point !== null);
 
         if (coordinates.length >= 2) {
           const closed = [...coordinates, coordinates[0]];
-          return mapGeoCoordinatesToTrackPath(closed);
+          const path = mapGeoCoordinatesToTrackPath(closed);
+          if (path) {
+            return path;
+          }
         }
       }
     } catch {
-      // Fall through to static fallback URLs.
+      // Fall back to configured static path.
     }
   }
 
-  if (!race.circuitGeoJsonUrl) {
-    return race.path;
-  }
-
-  const response = await fetch(race.circuitGeoJsonUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch GeoJSON: ${response.status}`);
-  }
-
-  const data = (await response.json()) as GeoFeatureCollection;
-  const feature = data.features?.find(
-    (item) => item.geometry?.type === "LineString",
-  );
-  const coordinates = feature?.geometry?.coordinates ?? [];
-  return mapGeoCoordinatesToTrackPath(coordinates) || race.path;
+  return race.path;
 }
 
 export async function fetchCompletedRaceSummary(
