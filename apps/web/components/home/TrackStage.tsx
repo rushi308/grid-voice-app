@@ -76,6 +76,15 @@ export function TrackStage({
           <h1 className="font-headline text-3xl font-black italic tracking-tight sm:text-4xl">
             {selectedRace.name}
           </h1>
+          {isDemoRound ? (
+            <p className="mt-1.5 max-w-xl text-pretty text-xs leading-snug text-(--text-secondary) sm:text-sm">
+              Demo sprint: timing, map, and grid data follow the{" "}
+              <span className="font-medium text-(--text-primary)/90">
+                Chinese Grand Prix 2026
+              </span>{" "}
+              round—synthesized for Explore, not a live session replay.
+            </p>
+          ) : null}
         </div>
         {isUpcomingCircuitOnly ? (
           <div className="glass-panel rounded-sm px-4 py-3 text-right">

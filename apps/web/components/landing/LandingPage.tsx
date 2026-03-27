@@ -18,7 +18,7 @@ const features: LandingFeature[] = [
   {
     title: "F1 (Formula 1) AI voice commentary",
     description:
-      "Commentary over WebSockets: language models draft lines from laps, gaps, and timing; text-to-speech turns them into audio when enabled—streamed from an AWS Serverless pipeline the explore view consumes end to end. Live race-day voice commentary during real sessions is coming soon; try the flow on the demo round today.",
+      "Commentary over WebSockets: language models draft lines from laps, gaps, and timing; text-to-speech turns them into audio when enabled—streamed from an AWS Serverless pipeline the explore view consumes end to end. Live race-day voice commentary during real sessions is coming soon; try the flow on the Live Demo Sprint—it uses Chinese Grand Prix 2026 circuit and session-shaped data so you can explore without race day.",
     highlight: true,
   },
   {
@@ -171,8 +171,8 @@ export function LandingPage() {
               Coming soon
             </span>
             : live AI voice commentary on race day (real sessions). Explore still
-            works now—maps, timing, and the commentary pipeline on the demo round—no
-            need to wait for lights out.
+            works now—maps, timing, and the commentary pipeline on the Live Demo Sprint
+            (Chinese Grand Prix 2026 demo data)—no need to wait for lights out.
           </p>
         </header>
 

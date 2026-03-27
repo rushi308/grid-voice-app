@@ -9,7 +9,7 @@ type SeasonRailProps = {
   onSelectRace: (race: RaceTrack) => void;
 };
 
-function isRaceCompleted(date: string): boolean {
+export function isRaceCompleted(date: string): boolean {
   const hasExplicitTime = date.includes("T");
   const startMs = Date.parse(date);
 
@@ -29,8 +29,8 @@ export function SeasonRail({
   onSelectRace,
 }: SeasonRailProps) {
   return (
-    <aside className="bg-(--surface-low) px-4 py-5 lg:px-5 lg:py-6">
-      <div className="mb-6 flex flex-col gap-2">
+    <aside className="bg-(--surface-low) px-4 py-4 sm:py-5 lg:px-5 lg:py-6">
+      <div className="mb-4 flex flex-col gap-2 sm:mb-6">
         <Link
           href="/"
           className="relative block h-11 w-full max-w-[220px] shrink-0 overflow-hidden rounded-sm ring-1 ring-(--surface-mid) transition hover:ring-(--signal-red)/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--signal-mint)"
@@ -50,13 +50,16 @@ export function SeasonRail({
         </p>
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between lg:mb-4">
         <h2 className="font-headline text-sm font-bold uppercase tracking-[0.22em] text-(--text-secondary)">
           2026 Season
         </h2>
       </div>
 
-      <div className="space-y-2">
+      <div
+        className="-mx-4 flex snap-x snap-mandatory flex-row gap-2 overflow-x-auto overscroll-x-contain px-4 pb-1 [scrollbar-width:thin] lg:mx-0 lg:flex-col lg:gap-2 lg:overflow-visible lg:px-0 lg:pb-0 lg:snap-none"
+        aria-label="Season rounds"
+      >
         {races.map((race) => {
           const active = race.slug === selectedRaceSlug;
           const completed = isRaceCompleted(race.date);
@@ -66,7 +69,7 @@ export function SeasonRail({
               type="button"
               key={race.slug}
               onClick={() => onSelectRace(race)}
-              className={`w-full rounded-sm px-3 py-3 text-left transition ${
+              className={`min-w-[min(85vw,260px)] shrink-0 snap-start rounded-sm px-3 py-3 text-left transition sm:min-w-[240px] lg:w-full lg:min-w-0 lg:snap-none ${
                 active
                   ? "bg-(--signal-red) text-white"
                   : "bg-[rgb(52_52_62/35%)] hover:bg-[rgb(52_52_62/58%)]"

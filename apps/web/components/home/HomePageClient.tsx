@@ -7,6 +7,7 @@ import { season2026 } from "@/lib/season2026";
 import type { RaceTrack } from "@grid-voice/types";
 import { CompletedRaceStage } from "./CompletedRaceStage";
 import { LeaderboardPanel } from "./LeaderboardPanel";
+import { SeasonMobileBar } from "./SeasonMobileBar";
 import { SeasonRail } from "./SeasonRail";
 import { TrackStage } from "./TrackStage";
 import { UpcomingRaceInfoPanel } from "./UpcomingRaceInfoPanel";
@@ -145,14 +146,23 @@ export function HomePageClient() {
   return (
     <div className="min-h-screen bg-(--carbon-900) text-(--text-primary)">
       <main className="grid min-h-screen grid-cols-1 lg:grid-cols-[270px_1fr]">
-        <SeasonRail
-          races={season2026}
-          selectedRaceSlug={selectedRace.slug}
-          onSelectRace={selectRace}
-        />
+        <div className="order-2 hidden min-h-0 border-t border-(--surface-mid) lg:order-1 lg:block lg:border-t-0">
+          <SeasonRail
+            races={season2026}
+            selectedRaceSlug={selectedRace.slug}
+            onSelectRace={selectRace}
+          />
+        </div>
 
         {raceStatus === "completed" ? (
-          <section className="min-h-screen">
+          <section className="order-1 min-h-screen lg:order-2">
+            <div className="lg:hidden">
+              <SeasonMobileBar
+                races={season2026}
+                selectedRaceSlug={selectedRace.slug}
+                onSelectRace={selectRace}
+              />
+            </div>
             <CompletedRaceStage
               selectedRace={selectedRace}
               completedSummary={completedSummary}
@@ -160,7 +170,14 @@ export function HomePageClient() {
             />
           </section>
         ) : (
-          <section className="grid min-h-screen grid-cols-1 content-start items-start xl:grid-cols-[1fr_320px]">
+          <section className="order-1 grid min-h-screen grid-cols-1 content-start items-start lg:order-2 xl:grid-cols-[1fr_320px]">
+            <div className="col-span-full lg:hidden">
+              <SeasonMobileBar
+                races={season2026}
+                selectedRaceSlug={selectedRace.slug}
+                onSelectRace={selectRace}
+              />
+            </div>
             {raceStatus === "upcoming" && !isDemoRound ? (
               <div className="col-span-full border-b border-(--surface-mid) bg-(--surface-low) px-4 py-2.5 text-center text-xs text-(--text-secondary) sm:text-sm">
                 <span className="font-semibold text-(--signal-mint)">
