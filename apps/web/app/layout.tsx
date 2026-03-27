@@ -15,7 +15,7 @@ const titilliumWeb = Titillium_Web({
 });
 
 export const metadata: Metadata = {
-  title: "Grid Voice | AI voice commentary",
+  title: "Grid Voice |  F1 AI voice commentary",
   description:
     "F1 UI with AI voice commentary: OpenAI language models plus playback/TTS via AWS Serverless—circuit tracking, timing, streaming transcript and audio.",
 };
