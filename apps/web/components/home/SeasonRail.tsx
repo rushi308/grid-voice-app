@@ -30,22 +30,24 @@ export function SeasonRail({
 }: SeasonRailProps) {
   return (
     <aside className="bg-(--surface-low) px-4 py-5 lg:px-5 lg:py-6">
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-6 flex flex-col gap-2">
         <Link
           href="/"
-          className="relative h-10 w-10 shrink-0 overflow-hidden rounded-sm ring-1 ring-(--surface-mid) transition hover:ring-(--signal-red)/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--signal-mint)"
+          className="relative block h-11 w-full max-w-[220px] shrink-0 overflow-hidden rounded-sm ring-1 ring-(--surface-mid) transition hover:ring-(--signal-red)/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--signal-mint)"
           aria-label="Grid Voice — AI voice commentary home"
         >
-          <Image src={logo} alt="" fill className="object-cover" sizes="40px" />
+          <Image
+            src={logo}
+            alt=""
+            fill
+            className="object-contain object-left"
+            sizes="220px"
+            priority
+          />
         </Link>
-        <div>
-          <p className="font-headline text-xs font-bold uppercase tracking-[0.2em] text-(--text-secondary)">
-            Grid Voice
-          </p>
-          <p className="font-headline text-lg font-bold italic tracking-tight">
-            AI voice commentary
-          </p>
-        </div>
+        <p className="font-headline text-sm font-bold italic tracking-tight text-(--text-secondary)">
+          AI voice commentary
+        </p>
       </div>
 
       <div className="mb-4 flex items-center justify-between">

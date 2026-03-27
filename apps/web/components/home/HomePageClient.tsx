@@ -160,7 +160,7 @@ export function HomePageClient() {
             />
           </section>
         ) : (
-          <section className="grid min-h-screen grid-cols-1 xl:grid-cols-[1fr_320px]">
+          <section className="grid min-h-screen grid-cols-1 content-start items-start xl:grid-cols-[1fr_320px]">
             {raceStatus === "upcoming" && !isDemoRound ? (
               <div className="col-span-full border-b border-(--surface-mid) bg-(--surface-low) px-4 py-2.5 text-center text-xs text-(--text-secondary) sm:text-sm">
                 <span className="font-semibold text-(--signal-mint)">
