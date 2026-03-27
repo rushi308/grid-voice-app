@@ -5,6 +5,18 @@ import { initialPointers } from "@/lib/season2026";
 import type { OpenF1MqttAuthPayload } from "@grid-voice/types";
 import type { LeaderboardRow } from "../types";
 
+/**
+ * @fileoverview
+ * Client hook: live OpenF1 timing via MQTT-over-WebSocket after the scheduled session start.
+ *
+ * Bootstraps `/api/openf1/mqtt-auth` for credentials, subscribes to location/interval/laps
+ * topics, filters by `session_key`, maintains running bounds for coordinate normalization,
+ * and periodically flushes ref-backed buffers into React state for the track and leaderboard.
+ *
+ * Before `raceDate`, returns idle metadata for countdown and static circuit URL only.
+ * Compare with {@link useDemoRaceData} for the offline replay path.
+ */
+
 type DriverPosition = {
   x: number;
   y: number;
@@ -69,6 +81,14 @@ const driversByNumber = new Map(
   initialPointers.map((driver) => [driver.number, driver]),
 );
 
+/**
+ * Coerces MQTT JSON primitives to finite numbers (mirrors `homeState` helpers).
+ *
+ * @param value - Raw field from an OpenF1 message.
+ * @returns Parsed number or `null`.
+ * @example
+ * asNumber("44"); // 44
+ */
 function asNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -82,10 +102,25 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
+/**
+ * Type guard for parsed MQTT payloads before property access.
+ *
+ * @param value - Result of `JSON.parse`.
+ * @example
+ * if (isRecord(message)) message.session_key;
+ */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+/**
+ * Decodes one MQTT payload chunk; supports batched JSON arrays or single objects.
+ *
+ * @param payload - Raw bytes from the `mqtt` client `message` event.
+ * @returns Non-empty array of parsed values; `[]` on invalid UTF-8/JSON.
+ * @example
+ * parseJsonMessage(new TextEncoder().encode('[{"x":1}]'));
+ */
 function parseJsonMessage(payload: Uint8Array): unknown[] {
   try {
     const text = new TextDecoder().decode(payload);
@@ -96,10 +131,30 @@ function parseJsonMessage(payload: Uint8Array): unknown[] {
   }
 }
 
+/**
+ * Clamps a value to `[min, max]` inclusive.
+ *
+ * @param value - Input.
+ * @param min - Lower bound.
+ * @param max - Upper bound.
+ * @example
+ * clamp(150, 0, 100); // 100
+ */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * Maps live world X/Y into the same 8–92 SVG viewBox as the demo hook, using expanding
+ * session bounds so the track scales as more samples arrive.
+ *
+ * @param x - Raw telemetry X.
+ * @param y - Raw telemetry Y.
+ * @param bounds - Min/max envelope seen so far for the session.
+ * @returns Clamped normalized coordinates for car markers.
+ * @example
+ * normalizeLocation(500, -200, { minX: 0, maxX: 1000, minY: -300, maxY: 0 });
+ */
 function normalizeLocation(
   x: number,
   y: number,
@@ -123,8 +178,34 @@ function normalizeLocation(
 }
 
 /**
- * Streams live race telemetry from OpenF1 over MQTT once the selected event starts.
- * Before start time, this hook only resolves meeting metadata and countdown details.
+ * Live OpenF1 session feed: locations, gaps, and lap counts over MQTT WebSocket.
+ *
+ * **Lifecycle**
+ * - `enabled === false` → idle reset.
+ * - Past `raceDate` + missing `preferredSessionKey` → throws into `lastError`.
+ * - Future `raceDate` → `eventStarted: false`, countdown ISO set, no MQTT.
+ * - After auth + connect → subscribes to `v1/location(s)`, `v1/interval(s)`, `v1/laps`.
+ *
+ * **State fields**
+ * - `progressMap` / `driverPositions` / `leaderboard` / `currentLap` mirror {@link useDemoRaceData}.
+ * - `status`: `idle` | `loading` | `connecting` | `open` | `error` | `closed`.
+ * - `messageCount` increments raw MQTT JSON items for debugging.
+ *
+ * @param enabled - Usually `!isDemoRound && raceStatus === "upcoming"`.
+ * @param totalLaps - Converts leader lap index to coarse progress fraction.
+ * @param raceDate - ISO string; gates MQTT until session wall time.
+ * @param circuitInfoUrl - Static outline while waiting or alongside live cars.
+ * @param preferredSessionKey - OpenF1 `session_key`; filters all incoming messages.
+ * @returns {@link LiveRaceData} merged snapshot; ref updates coalesce to roughly 120 ms (`FLUSH_INTERVAL_MS`).
+ *
+ * @example
+ * const live = useOpenF1MqttRaceData({
+ *   enabled: true,
+ *   totalLaps: selectedRace.laps,
+ *   raceDate: selectedRace.date,
+ *   circuitInfoUrl: selectedRace.circuitInfoUrl,
+ *   preferredSessionKey: selectedRace.sessionKey,
+ * });
  */
 export function useOpenF1MqttRaceData({
   enabled,
@@ -170,6 +251,15 @@ export function useOpenF1MqttRaceData({
     maxY: 1,
   });
 
+  /**
+   * Flushes MQTT ref maps into a {@link LiveRaceData} snapshot for React (throttled via `scheduleFlush`).
+   * Sorts rows by gap-to-leader, then lap, then progress; formats `LEADER` / gap interval labels.
+   *
+   * @param status - Connection or UI status to carry through (`open`, `error`, …).
+   * @param lastError - Most recent user-visible error, if any.
+   * @param metadata - `eventStarted`, countdown ISO, and circuit URL from prior state.
+   * @returns Full snapshot; telemetry fields `null` until at least one driver has MQTT data.
+   */
   const buildSnapshot = useCallback(
     (
       status: LiveRaceData["status"],
@@ -300,6 +390,12 @@ export function useOpenF1MqttRaceData({
     [totalLaps],
   );
 
+  /**
+   * Subscribes to OpenF1 MQTT when `enabled` and `Date.now()` ≥ parsed `raceDate`.
+   * Resets refs on debounced inputs, fetches auth, connects, and wires throttled `setState`.
+   *
+   * Cleanup ends the client and clears flush timers; `isCancelled` avoids setState after unmount.
+   */
   useEffect(() => {
     if (!enabled) {
       setState({

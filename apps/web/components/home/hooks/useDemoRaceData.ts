@@ -21,6 +21,19 @@ import { initialPointers } from "@/lib/season2026";
 import type { DriverPointer } from "@grid-voice/types";
 import type { LeaderboardRow } from "../types";
 
+/**
+ * @fileoverview
+ * Offline demo race replay for the Explore **demo live round**.
+ *
+ * Reads bundled OpenF1-style JSON under `data/china-26/` (circuit polyline, intervals,
+ * laps, and per-driver location time series). Maps raw X/Y into a fixed SVG viewBox
+ * (8–92), snaps noisy samples onto the track centerline, and rebuilds leaderboard gaps
+ * for a virtual timeline advanced by `raceClockSeconds` from the UI clock.
+ *
+ * When `enabled` is false, the hook returns null fields so callers fall back to static
+ * paths or other hooks (see {@link useOpenF1MqttRaceData} for live session streaming).
+ */
+
 /** 15-car China demo grid (all drivers have `driver-locations/*.json` samples). */
 const DEMO_DRIVER_NUMBERS = [
   3, 6, 10, 11, 12, 16, 27, 30, 31, 41, 43, 44, 55, 63, 77,
@@ -95,13 +108,13 @@ type DriverPosition = {
   y: number;
 };
 
-type UseChinaDemoRaceDataArgs = {
+type UseDemoRaceDataArgs = {
   enabled: boolean;
   raceClockSeconds: number;
   totalLaps: number;
 };
 
-type UseChinaDemoRaceDataResult = {
+type UseDemoRaceDataResult = {
   trackPath: string | null;
   progressMap: Record<string, number> | null;
   leaderboard: LeaderboardRow[] | null;
@@ -243,6 +256,15 @@ const normalizedCircuitPoints: DriverPosition[] = (() => {
   return points;
 })();
 
+/**
+ * Snaps a point to the closest location on the piecewise-linear circuit polyline.
+ * Raw telemetry often sits slightly off the ideal racing line; this keeps car glyphs on the track.
+ *
+ * @param point - Coordinates in the same normalized space as {@link normalizeX} / {@link normalizeY}.
+ * @returns Nearest point on the circuit path (or the input if the polyline is empty).
+ * @example
+ * projectPointToTrack({ x: 52.1, y: 61.4 });
+ */
 function projectPointToTrack(point: DriverPosition): DriverPosition {
   if (normalizedCircuitPoints.length === 0) {
     return point;
@@ -596,8 +618,12 @@ for (const driverNumber of DEMO_DRIVER_NUMBERS) {
 }
 
 /**
- * Resolves race launch point from first moving telemetry samples.
- * Uses centroid of first moving point for each demo driver.
+ * Computes a single grid/launch marker as the centroid of each car’s first meaningful motion sample.
+ * Falls back to {@link resolveFinishLinePoint} if no driver yields a valid point.
+ *
+ * @returns Normalized `{ x, y }` for the start gantry / standing start visualization.
+ * @example
+ * resolveRaceStartPoint(); // centroid of projected first-moving samples
  */
 function resolveRaceStartPoint(): DriverPosition {
   const movingPoints: DriverPosition[] = [];
@@ -651,21 +677,39 @@ function resolveFinishLinePoint(): DriverPosition {
     y: normalizeY(yPoints[safeIndex]),
   };
 }
+
 /**
- * Builds demo replay state from China dataset (`circuit.json`, `interval.json`, locations, laps).
+ * React hook: memoized demo replay snapshot aligned to the global race clock.
  *
- * @param args.enabled - Whether demo dataset should drive UI.
- * @param args.raceClockSeconds - Global UI race clock in seconds.
- * @param args.totalLaps - Configured race lap count.
- * @returns Derived track path, leaderboard, positions, lap marker, and countdown state.
+ * Timeline: an initial countdown (`DEMO_START_COUNTDOWN_SECONDS`), then samples are chosen
+ * from each driver’s location series at `intervalStartMs + (clock - offset) * 1000`.
+ * Intervals/gaps and leader lap come from the same virtual clock for consistent UI.
+ *
+ * @param args.enabled - When `false`, returns all-null fields (demo round not selected or SSR guard).
+ * @param args.raceClockSeconds - Monotonic seconds from `useRaceClock`; drives replay scrub.
+ * @param args.totalLaps - Race distance cap; clamps displayed lap from leader’s lap series.
+ * @returns
+ * - `trackPath` — SVG `d` string for the circuit, or `null` if disabled / invalid data.
+ * - `progressMap` — Per-driver lap fraction [0–1] for `animateMotion` / pacing.
+ * - `leaderboard` — Sorted {@link LeaderboardRow}s with gaps from interval data.
+ * - `driverPositions` — Projected normalized coordinates per three-letter code.
+ * - `currentLap` — Leader lap number from lap JSON at the active timestamp.
+ * - `startPoint` / `lapEndPoint` — Markers for start and timing-line UI overlays.
+ * - `startCountdownValue` — Seconds remaining before synthetic green flag, or `null` when running.
+ * - `suppressPositionTransition` — Briefly true after start to avoid animation glitches.
+ *
  * @example
- * const demo = useChinaDemoRaceData({ enabled: true, raceClockSeconds: 12, totalLaps: 56 });
+ * const { trackPath, leaderboard, startCountdownValue } = useDemoRaceData({
+ *   enabled: slug === "demo-live-round",
+ *   raceClockSeconds: clock,
+ *   totalLaps: 56,
+ * });
  */
-export function useChinaDemoRaceData({
+export function useDemoRaceData({
   enabled,
   raceClockSeconds,
   totalLaps,
-}: UseChinaDemoRaceDataArgs): UseChinaDemoRaceDataResult {
+}: UseDemoRaceDataArgs): UseDemoRaceDataResult {
   return useMemo(() => {
     if (
       !enabled ||

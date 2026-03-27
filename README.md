@@ -4,7 +4,7 @@ NPM workspace for an AI-powered F1 race commentary platform.
 
 ## Workspaces
 
-- `apps/web`: Next.js (TypeScript) frontend for requesting and previewing AI commentary.
+- `apps/web`: Next.js (TypeScript) frontend for requesting and previewing AI commentary. The **landing page** is at `/`; the full **race control UI** (season rail, track, leaderboard, live/demo feeds) is at `/explore`. See `apps/web/README.md` for details.
 - `apps/commentary-service`: WebSocket Lambda API for generating and streaming race commentary.
 - `packages/types`: Shared TypeScript types used across app and infra.
 - `packages/validation`: Zod schemas and validation helpers.

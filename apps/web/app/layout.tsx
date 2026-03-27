@@ -15,8 +15,9 @@ const titilliumWeb = Titillium_Web({
 });
 
 export const metadata: Metadata = {
-  title: "Grid Voice | Race Control",
-  description: "Live race control UI with dynamic circuit tracking",
+  title: "Grid Voice | AI voice commentary",
+  description:
+    "F1 UI with AI voice commentary: OpenAI language models plus playback/TTS via AWS Serverless—circuit tracking, timing, streaming transcript and audio.",
 };
 
 export default function RootLayout({

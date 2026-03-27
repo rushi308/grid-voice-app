@@ -13,7 +13,7 @@ import { UpcomingRaceInfoPanel } from "./UpcomingRaceInfoPanel";
 import { UpcomingRaceTrackStage } from "./UpcomingRaceTrackStage";
 import { deriveRaceStatus, toRaceMetrics } from "./homeState";
 import { useAnimatedProgressMap } from "./hooks/useAnimatedProgressMap";
-import { useChinaDemoRaceData } from "./hooks/useChinaDemoRaceData";
+import { useDemoRaceData } from "./hooks/useDemoRaceData";
 import { useCompletedRaceSummary } from "./hooks/useCompletedRaceSummary";
 import { useEventCountdown } from "./hooks/useEventCountdown";
 import { useLeaderboard } from "./hooks/useLeaderboard";
@@ -87,7 +87,7 @@ export function HomePageClient() {
     sendIntervalMs: 4000,
   });
   const leaderboard = useLeaderboard(progressMap);
-  const chinaDemoData = useChinaDemoRaceData({
+  const demoRaceData = useDemoRaceData({
     enabled: isDemoRound,
     raceClockSeconds: raceClock,
     totalLaps: selectedRace.laps,
@@ -110,15 +110,15 @@ export function HomePageClient() {
     openF1MqttData.circuitInfoUrl,
   );
   const activeTrackPath = useHydratedDemoData
-    ? (chinaDemoData.trackPath ?? resolvedTrackPath)
+    ? (demoRaceData.trackPath ?? resolvedTrackPath)
     : resolvedTrackPath;
   const activeProgressMap = useHydratedDemoData
-    ? (chinaDemoData.progressMap ?? progressMap)
+    ? (demoRaceData.progressMap ?? progressMap)
     : shouldUseOpenF1Live
       ? (openF1MqttData.progressMap ?? progressMap)
       : progressMap;
   const activeLeaderboard = useHydratedDemoData
-    ? (chinaDemoData.leaderboard ?? leaderboard)
+    ? (demoRaceData.leaderboard ?? leaderboard)
     : shouldUseOpenF1Live
       ? (openF1MqttData.leaderboard ?? leaderboard)
       : leaderboard;
@@ -128,7 +128,7 @@ export function HomePageClient() {
     airTemp,
   } = toRaceMetrics(raceClock, selectedRace.laps);
   const currentLap = useHydratedDemoData
-    ? (chinaDemoData.currentLap ?? fallbackLap)
+    ? (demoRaceData.currentLap ?? fallbackLap)
     : shouldUseOpenF1Live
       ? (openF1MqttData.currentLap ?? fallbackLap)
       : fallbackLap;
@@ -161,6 +161,15 @@ export function HomePageClient() {
           </section>
         ) : (
           <section className="grid min-h-screen grid-cols-1 xl:grid-cols-[1fr_320px]">
+            {raceStatus === "upcoming" && !isDemoRound ? (
+              <div className="col-span-full border-b border-(--surface-mid) bg-(--surface-low) px-4 py-2.5 text-center text-xs text-(--text-secondary) sm:text-sm">
+                <span className="font-semibold text-(--signal-mint)">
+                  Coming soon:
+                </span>{" "}
+                Live race-day AI voice commentary during real sessions. Session timing
+                and maps below are live today.
+              </div>
+            ) : null}
             {showUpcomingCircuitOnly ? (
               <>
                 <UpcomingRaceTrackStage
@@ -182,16 +191,16 @@ export function HomePageClient() {
                   leaderboard={renderedLeaderboard}
                   driverPositions={
                     useHydratedDemoData
-                      ? chinaDemoData.driverPositions
+                      ? demoRaceData.driverPositions
                       : shouldUseOpenF1Live
                         ? openF1MqttData.driverPositions
                         : null
                   }
                   startPoint={
-                    useHydratedDemoData ? chinaDemoData.startPoint : null
+                    useHydratedDemoData ? demoRaceData.startPoint : null
                   }
                   lapEndPoint={
-                    useHydratedDemoData ? chinaDemoData.lapEndPoint : null
+                    useHydratedDemoData ? demoRaceData.lapEndPoint : null
                   }
                   isDemoRound={isDemoRound}
                   liveSocketStatus={
@@ -229,14 +238,14 @@ export function HomePageClient() {
                   showDemoCommentaryPanel={isHydrated && isDemoRound}
                   startCountdownValue={
                     useHydratedDemoData
-                      ? (chinaDemoData.startCountdownValue ?? null)
+                      ? (demoRaceData.startCountdownValue ?? null)
                       : null
                   }
                   upcomingCountdownLabel={null}
                   isUpcomingCircuitOnly={false}
                   suppressDriverTransition={
                     useHydratedDemoData
-                      ? chinaDemoData.suppressPositionTransition
+                      ? demoRaceData.suppressPositionTransition
                       : false
                   }
                   trackRotationDegrees={isDemoRound ? 120 : 0}

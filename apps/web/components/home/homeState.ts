@@ -1,3 +1,13 @@
+/**
+ * @fileoverview
+ * Pure helpers for race UI state: clock ticks, mock weather/lap metrics, leaderboard from
+ * progress, OpenF1 HTTP fetch for circuit geometry and completed session results, and
+ * calendar logic to mark races as upcoming vs completed.
+ *
+ * Used by client hooks and server/API-free `fetch` paths from components such as
+ * `useResolvedTrackPath`, `useCompletedRaceSummary`, and `HomePageClient`.
+ */
+
 import { initialPointers } from "@/lib/season2026";
 import type { RaceTrack } from "@grid-voice/types";
 import type { CompletedRaceSummary, LeaderboardRow } from "./types";
@@ -30,6 +40,15 @@ type OpenF1SessionResult = {
   dsq?: unknown;
 };
 
+/**
+ * Parses loose JSON fields from OpenF1 into finite numbers.
+ *
+ * @param value - A number, numeric string, or anything else.
+ * @returns A finite number, or `null` if parsing fails.
+ * @example
+ * asNumber("12.5"); // 12.5
+ * asNumber(""); // null
+ */
 function asNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -43,10 +62,28 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
+/**
+ * Normalizes JSON string fields; non-strings become empty string.
+ *
+ * @param value - Arbitrary API payload field.
+ * @returns Original string or `""`.
+ * @example
+ * asString(null); // ""
+ * asString("VER"); // "VER"
+ */
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+/**
+ * Reads boolean-ish flags (boolean or `"true"` string) from OpenF1 result rows.
+ *
+ * @param value - `boolean`, string, or other.
+ * @returns Coerced boolean.
+ * @example
+ * asBoolean("true"); // true
+ * asBoolean(1); // false
+ */
 function asBoolean(value: unknown): boolean {
   if (typeof value === "boolean") {
     return value;
@@ -59,6 +96,16 @@ function asBoolean(value: unknown): boolean {
   return false;
 }
 
+/**
+ * Formats a race time for the results table (leader race time or stint duration).
+ * Uses `mm:ss.mmm`, or `h:mm:ss.mmm` when an hour or more.
+ *
+ * @param seconds - Elapsed seconds (non-negative; negative clamped to 0).
+ * @returns Human-readable duration string.
+ * @example
+ * formatDurationSeconds(65.432); // "1:05.432"
+ * formatDurationSeconds(3665.1); // "1:01:05.100"
+ */
 function formatDurationSeconds(seconds: number): string {
   const safe = Math.max(0, seconds);
   const totalMilliseconds = Math.round(safe * 1000);
@@ -75,10 +122,25 @@ function formatDurationSeconds(seconds: number): string {
   return `${minutes}:${String(secs).padStart(2, "0")}.${String(milliseconds).padStart(3, "0")}`;
 }
 
+/**
+ * Advances the synthetic race clock by one second (demo / idle animation ticks).
+ *
+ * @param clock - Current integer second counter.
+ * @returns `clock + 1`.
+ * @example
+ * nextRaceClock(41); // 42
+ */
 export function nextRaceClock(clock: number): number {
   return clock + 1;
 }
 
+/**
+ * Seeds a per-driver progress map from {@link initialPointers} for placeholder animation.
+ *
+ * @returns Map of driver `code` → lap fraction in `[0, 1)`.
+ * @example
+ * buildInitialProgress(); // { VER: 0.12, NOR: 0.14, ... }
+ */
 export function buildInitialProgress(): Record<string, number> {
   const freshMap: Record<string, number> = {};
   initialPointers.forEach((driver, index) => {
@@ -87,6 +149,17 @@ export function buildInitialProgress(): Record<string, number> {
   return freshMap;
 }
 
+/**
+ * Fits arbitrary `[x, y]` world coordinates into the standard track SVG viewBox (8–92),
+ * returning a compact SVG path (`M`/`L` commands). Latitude-like axis is inverted so
+ * “north” maps visually upward like the demo/live hooks.
+ *
+ * @param coordinates - Polyline as `[lonOrX, latOrY][]`; first point opens the path.
+ * @returns Space-separated SVG path fragment, or `""` if empty.
+ * @example
+ * mapGeoCoordinatesToTrackPath([[0, 0], [1, 0], [1, 1]]);
+ * // "M8.00,92.00 L92.00,92.00 L92.00,8.00"
+ */
 export function mapGeoCoordinatesToTrackPath(coordinates: number[][]): string {
   if (!coordinates.length) {
     return "";
@@ -121,6 +194,15 @@ export function mapGeoCoordinatesToTrackPath(coordinates: number[][]): string {
     .join(" ");
 }
 
+/**
+ * Compares wall-clock time to a race `date` string to decide archive vs upcoming UX.
+ * Date-only strings use end-of-day UTC; timestamps add a four-hour session window.
+ *
+ * @param date - ISO date or datetime from {@link RaceTrack}.
+ * @returns `"completed"` if the inferred session end is in the past, else `"upcoming"`.
+ * @example
+ * deriveRaceStatus("2020-01-01"); // likely "completed"
+ */
 export function deriveRaceStatus(date: string): "completed" | "upcoming" {
   const hasExplicitTime = date.includes("T");
   const startMs = Date.parse(date);
@@ -136,6 +218,15 @@ export function deriveRaceStatus(date: string): "completed" | "upcoming" {
   return Date.now() > fallbackEndMs ? "completed" : "upcoming";
 }
 
+/**
+ * Cheap stand-in lap and temperature readouts when no MQTT row is available (demo clock only).
+ *
+ * @param raceClock - Tick counter from the UI clock.
+ * @param laps - Total laps for modulo on synthetic current lap.
+ * @returns `{ currentLap, trackTemp, airTemp }` derived deterministically from `raceClock`.
+ * @example
+ * toRaceMetrics(28, 58); // { currentLap: 3, trackTemp: 36, airTemp: 23 }
+ */
 export function toRaceMetrics(
   raceClock: number,
   laps: number,
@@ -151,6 +242,14 @@ export function toRaceMetrics(
   };
 }
 
+/**
+ * Orders drivers by progress fraction and fabricates pseudo gap strings for fallback UI.
+ *
+ * @param progressMap - Driver code → position around lap [0–1], from animation or MQTT.
+ * @returns Sorted {@link LeaderboardRow} list with `LEADER` / `+X.XXXs` intervals.
+ * @example
+ * buildLeaderboard({ VER: 0.9, NOR: 0.85 });
+ */
 export function buildLeaderboard(
   progressMap: Record<string, number>,
 ): LeaderboardRow[] {
@@ -172,6 +271,17 @@ export function buildLeaderboard(
   });
 }
 
+/**
+ * Fetches circuit outline from OpenF1’s circuit info JSON when `circuitInfoUrl` is set.
+ * Tries parallel `x`/`y` arrays first, then corner world positions, mapped via
+ * {@link mapGeoCoordinatesToTrackPath}. Closes the loop with a duplicate first point.
+ * On failure or missing URL, returns the static `race.path` from the season config.
+ *
+ * @param race - Selected round; uses `circuitInfoUrl` and fallback `path`.
+ * @returns SVG `d` string suitable for the track stage.
+ * @example
+ * const d = await fetchTrackPath(season2026[3]);
+ */
 export async function fetchTrackPath(race: RaceTrack): Promise<string> {
   if (race.circuitInfoUrl) {
     try {
@@ -223,6 +333,18 @@ export async function fetchTrackPath(race: RaceTrack): Promise<string> {
   return race.path;
 }
 
+/**
+ * Pulls classified results for a completed session from OpenF1 REST `session_result`.
+ * Normalizes DNF/DNS/DSQ, formats gaps and winner race time, merges with `initialPointers`
+ * for team/color fallbacks, and returns podium slice plus full table.
+ *
+ * @param race - Must include `sessionKey` for the API query.
+ * @returns {@link CompletedRaceSummary} with `topThree` and `results`.
+ * @throws If `sessionKey` is missing, HTTP errors, or payload empty.
+ * @example
+ * const summary = await fetchCompletedRaceSummary(selectedRace);
+ * console.log(summary.topThree[0].code);
+ */
 export async function fetchCompletedRaceSummary(
   race: RaceTrack,
 ): Promise<CompletedRaceSummary> {

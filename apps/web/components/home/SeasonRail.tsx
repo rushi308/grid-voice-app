@@ -1,3 +1,6 @@
+import Image from "next/image";
+import Link from "next/link";
+import logo from "@/assets/logo.png";
 import type { RaceTrack } from "@grid-voice/types";
 
 type SeasonRailProps = {
@@ -28,13 +31,19 @@ export function SeasonRail({
   return (
     <aside className="bg-(--surface-low) px-4 py-5 lg:px-5 lg:py-6">
       <div className="mb-6 flex items-center gap-3">
-        <div className="h-10 w-10 rounded-sm bg-(--signal-red)" />
+        <Link
+          href="/"
+          className="relative h-10 w-10 shrink-0 overflow-hidden rounded-sm ring-1 ring-(--surface-mid) transition hover:ring-(--signal-red)/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--signal-mint)"
+          aria-label="Grid Voice — AI voice commentary home"
+        >
+          <Image src={logo} alt="" fill className="object-cover" sizes="40px" />
+        </Link>
         <div>
           <p className="font-headline text-xs font-bold uppercase tracking-[0.2em] text-(--text-secondary)">
             Grid Voice
           </p>
           <p className="font-headline text-lg font-bold italic tracking-tight">
-            Race Control
+            AI voice commentary
           </p>
         </div>
       </div>

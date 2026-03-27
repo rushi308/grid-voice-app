@@ -323,24 +323,13 @@ export function TrackStage({
         ) : null}
       </div>
 
-      <div
-        suppressHydrationWarning
-        className="glass-panel mt-6 rounded-sm px-4 py-3 text-sm italic text-[rgb(228_225_238/84%)]"
-      >
-        {isUpcomingCircuitOnly
-          ? "Circuit blueprint loaded from the selected race profile. Live telemetry and race order will appear when the event starts."
-          : isHydrated
-            ? liveStatusText
-            : "AI Insight: Tire delta suggests an undercut window in approximately 4 laps for P2-P4."}
-      </div>
-
       {showDemoCommentaryPanel ? (
         <div className="glass-panel mt-3 rounded-sm px-4 py-3 text-sm text-[rgb(228_225_238/90%)]">
           <p className="mb-1 text-xs uppercase tracking-[0.18em] text-(--text-secondary)">
-            Live Commentary Transcript
+            AI voice commentary — transcript
           </p>
           <p className="min-h-6 font-medium italic text-(--signal-mint)">
-            {liveTranscript ?? "Waiting for first generated commentary..."}
+            {liveTranscript ?? "Waiting for first AI voice commentary…"}
           </p>
           <p className="mt-2 text-xs uppercase tracking-[0.16em] text-(--text-secondary)">
             Audio{" "}
@@ -351,6 +340,17 @@ export function TrackStage({
           ) : null}
         </div>
       ) : null}
+
+      <div
+        suppressHydrationWarning
+        className="glass-panel mt-6 rounded-sm px-4 py-3 text-sm italic text-[rgb(228_225_238/84%)]"
+      >
+        {isUpcomingCircuitOnly
+          ? "Circuit blueprint loaded from the selected race profile. Live telemetry and race order will appear when the event starts."
+          : isHydrated
+            ? liveStatusText
+            : "AI Insight: Tire delta suggests an undercut window in approximately 4 laps for P2-P4."}
+      </div>
     </div>
   );
 }
