@@ -20,6 +20,7 @@ type TrackStageProps = {
   liveAudioUrl: string | null;
   liveLastError: string | null;
   showDemoCommentaryPanel: boolean;
+  isHydrated: boolean;
   startCountdownValue: number | null;
   trackRotationDegrees?: number;
 };
@@ -43,9 +44,15 @@ export function TrackStage({
   liveAudioUrl,
   liveLastError,
   showDemoCommentaryPanel,
+  isHydrated,
   startCountdownValue,
   trackRotationDegrees = 0,
 }: TrackStageProps) {
+  const liveStatusText =
+    isDemoRound || liveSocketStatus !== "idle"
+      ? `Live Feed: ${liveSocketStatus.toUpperCase()} | Events ${liveSentCount}/${liveTotalCount}${liveLastError ? ` | ${liveLastError}` : ""}${liveLastMessage ? ` | Last Ack ${liveLastMessage}` : ""}`
+      : "AI Insight: Tire delta suggests an undercut window in approximately 4 laps for P2-P4.";
+
   return (
     <div className="relative overflow-hidden bg-[radial-gradient(circle_at_20%_15%,#34343E_0%,#15151E_45%,#13131B_100%)] p-5 sm:p-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -124,7 +131,6 @@ export function TrackStage({
                 />
               </g>
             ) : null}
-
 
             {leaderboard.map((driver, index) => {
               const staticPosition = driverPositions?.[driver.code];
@@ -206,9 +212,12 @@ export function TrackStage({
         ) : null}
       </div>
 
-      <div className="glass-panel mt-6 rounded-sm px-4 py-3 text-sm italic text-[rgb(228_225_238/84%)]">
-        {isDemoRound
-          ? `Live Demo Socket: ${liveSocketStatus.toUpperCase()} | Sent ${liveSentCount}/${liveTotalCount}${liveLastError ? ` | ${liveLastError}` : ""}${liveLastMessage ? ` | Last Ack ${liveLastMessage}` : ""}`
+      <div
+        suppressHydrationWarning
+        className="glass-panel mt-6 rounded-sm px-4 py-3 text-sm italic text-[rgb(228_225_238/84%)]"
+      >
+        {isHydrated
+          ? liveStatusText
           : "AI Insight: Tire delta suggests an undercut window in approximately 4 laps for P2-P4."}
       </div>
 

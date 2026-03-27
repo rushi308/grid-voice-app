@@ -13,6 +13,7 @@ import { useAnimatedProgressMap } from "./hooks/useAnimatedProgressMap";
 import { useChinaDemoRaceData } from "./hooks/useChinaDemoRaceData";
 import { useCompletedRaceSummary } from "./hooks/useCompletedRaceSummary";
 import { useLeaderboard } from "./hooks/useLeaderboard";
+import { useOpenF1MqttRaceData } from "./hooks/useOpenF1MqttRaceData";
 import { useRaceClock } from "./hooks/useRaceClock";
 import { useResolvedTrackPath } from "./hooks/useResolvedTrackPath";
 
@@ -25,6 +26,7 @@ export function HomePageClient() {
   const { raceClock, resetRaceClock } = useRaceClock();
   const { progressMap, resetProgressMap } = useAnimatedProgressMap();
   const isDemoRound = selectedRace.slug === "demo-live-round";
+  const isJapanRound = selectedRace.slug === "japan";
   const resolvedTrackPath = useResolvedTrackPath(selectedRace);
 
   useEffect(() => {
@@ -83,22 +85,33 @@ export function HomePageClient() {
     raceClockSeconds: raceClock,
     totalLaps: selectedRace.laps,
   });
+  const openF1MqttData = useOpenF1MqttRaceData({
+    enabled: isJapanRound,
+    totalLaps: selectedRace.laps,
+  });
   const activeTrackPath = isDemoRound
     ? (chinaDemoData.trackPath ?? resolvedTrackPath)
     : resolvedTrackPath;
   const activeProgressMap = isDemoRound
     ? (chinaDemoData.progressMap ?? progressMap)
-    : progressMap;
+    : isJapanRound
+      ? (openF1MqttData.progressMap ?? progressMap)
+      : progressMap;
   const activeLeaderboard = isDemoRound
     ? (chinaDemoData.leaderboard ?? leaderboard)
-    : leaderboard;
-  const { currentLap: fallbackLap, trackTemp, airTemp } = toRaceMetrics(
-    raceClock,
-    selectedRace.laps,
-  );
+    : isJapanRound
+      ? (openF1MqttData.leaderboard ?? leaderboard)
+      : leaderboard;
+  const {
+    currentLap: fallbackLap,
+    trackTemp,
+    airTemp,
+  } = toRaceMetrics(raceClock, selectedRace.laps);
   const currentLap = isDemoRound
     ? (chinaDemoData.currentLap ?? fallbackLap)
-    : fallbackLap;
+    : isJapanRound
+      ? (openF1MqttData.currentLap ?? fallbackLap)
+      : fallbackLap;
 
   const selectRace = (race: RaceTrack) => {
     setSelectedRace(race);
@@ -133,16 +146,41 @@ export function HomePageClient() {
               trackTemp={trackTemp}
               progressMap={activeProgressMap}
               leaderboard={activeLeaderboard}
-              driverPositions={isDemoRound ? chinaDemoData.driverPositions : null}
+              driverPositions={
+                isDemoRound
+                  ? chinaDemoData.driverPositions
+                  : isJapanRound
+                    ? openF1MqttData.driverPositions
+                    : null
+              }
               lapEndPoint={isDemoRound ? chinaDemoData.lapEndPoint : null}
               isDemoRound={isDemoRound}
-              liveSocketStatus={liveFeedSocket.status}
-              liveSentCount={liveFeedSocket.sentCount}
-              liveTotalCount={liveFeedSocket.totalCount}
-              liveLastMessage={liveFeedSocket.latestServerMessage}
-              liveTranscript={liveFeedSocket.latestTranscript}
-              liveAudioUrl={liveFeedSocket.latestAudioUrl}
-              liveLastError={liveFeedSocket.lastError}
+              liveSocketStatus={
+                isJapanRound ? openF1MqttData.status : liveFeedSocket.status
+              }
+              liveSentCount={
+                isJapanRound
+                  ? openF1MqttData.messageCount
+                  : liveFeedSocket.sentCount
+              }
+              liveTotalCount={
+                isJapanRound
+                  ? openF1MqttData.messageCount
+                  : liveFeedSocket.totalCount
+              }
+              liveLastMessage={
+                isJapanRound ? null : liveFeedSocket.latestServerMessage
+              }
+              liveTranscript={
+                isJapanRound ? null : liveFeedSocket.latestTranscript
+              }
+              liveAudioUrl={isJapanRound ? null : liveFeedSocket.latestAudioUrl}
+              liveLastError={
+                isJapanRound
+                  ? openF1MqttData.lastError
+                  : liveFeedSocket.lastError
+              }
+              isHydrated={isHydrated}
               showDemoCommentaryPanel={isHydrated && isDemoRound}
               startCountdownValue={
                 isDemoRound ? (chinaDemoData.startCountdownValue ?? null) : null
