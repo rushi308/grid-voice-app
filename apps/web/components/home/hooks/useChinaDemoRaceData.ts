@@ -2,16 +2,62 @@ import { useMemo } from "react";
 import circuitData from "@/data/china-26/circuit.json";
 import intervalData from "@/data/china-26/interval.json";
 import lapsData from "@/data/china-26/laps.json";
+import driver3Locations from "@/data/china-26/driver-locations/3.json";
+import driver6Locations from "@/data/china-26/driver-locations/6.json";
+import driver10Locations from "@/data/china-26/driver-locations/10.json";
+import driver11Locations from "@/data/china-26/driver-locations/11.json";
 import driver12Locations from "@/data/china-26/driver-locations/12.json";
 import driver16Locations from "@/data/china-26/driver-locations/16.json";
+import driver27Locations from "@/data/china-26/driver-locations/27.json";
+import driver30Locations from "@/data/china-26/driver-locations/30.json";
+import driver31Locations from "@/data/china-26/driver-locations/31.json";
+import driver41Locations from "@/data/china-26/driver-locations/41.json";
+import driver43Locations from "@/data/china-26/driver-locations/43.json";
 import driver44Locations from "@/data/china-26/driver-locations/44.json";
+import driver55Locations from "@/data/china-26/driver-locations/55.json";
 import driver63Locations from "@/data/china-26/driver-locations/63.json";
+import driver77Locations from "@/data/china-26/driver-locations/77.json";
 import { initialPointers } from "@/lib/season2026";
+import type { DriverPointer } from "@grid-voice/types";
 import type { LeaderboardRow } from "../types";
 
-const DEMO_DRIVER_NUMBERS = [12, 16, 44, 63] as const;
+/** 15-car China demo grid (all drivers have `driver-locations/*.json` samples). */
+const DEMO_DRIVER_NUMBERS = [
+  3, 6, 10, 11, 12, 16, 27, 30, 31, 41, 43, 44, 55, 63, 77,
+] as const;
+
+/** Session numbers present in China data but not yet in `initialPointers`. */
+const CHINA_ONLY_DEMO_DRIVERS: DriverPointer[] = [
+  {
+    code: "DOO",
+    number: 11,
+    fullName: "Jack Doohan",
+    team: "Alpine",
+    color: "#FF87BC",
+    pace: 0.128,
+    progress: 0.12,
+  },
+  {
+    code: "MAL",
+    number: 41,
+    fullName: "Zane Maloney",
+    team: "Kick Sauber",
+    color: "#52E252",
+    pace: 0.124,
+    progress: 0.125,
+  },
+  {
+    code: "BOT",
+    number: 77,
+    fullName: "Valtteri Bottas",
+    team: "Kick Sauber",
+    color: "#52E252",
+    pace: 0.124,
+    progress: 0.13,
+  },
+];
 const DEMO_INTERVAL_START_ISO = "2026-03-15T07:04:06.055000+00:00";
-const DEMO_START_COUNTDOWN_SECONDS = 3;
+const DEMO_START_COUNTDOWN_SECONDS = 10;
 const DEMO_START_TRANSITION_SUPPRESS_SECONDS = 2;
 
 type CircuitData = {
@@ -72,15 +118,27 @@ const intervals = intervalData as IntervalEntry[];
 const laps = lapsData as LapEntry[];
 
 const locationsByDriverNumber: Record<number, LocationEntry[]> = {
+  3: driver3Locations as LocationEntry[],
+  6: driver6Locations as LocationEntry[],
+  10: driver10Locations as LocationEntry[],
+  11: driver11Locations as LocationEntry[],
   12: driver12Locations as LocationEntry[],
   16: driver16Locations as LocationEntry[],
+  27: driver27Locations as LocationEntry[],
+  30: driver30Locations as LocationEntry[],
+  31: driver31Locations as LocationEntry[],
+  41: driver41Locations as LocationEntry[],
+  43: driver43Locations as LocationEntry[],
   44: driver44Locations as LocationEntry[],
+  55: driver55Locations as LocationEntry[],
   63: driver63Locations as LocationEntry[],
+  77: driver77Locations as LocationEntry[],
 };
 
-const driverByNumber = new Map(
-  initialPointers.map((driver) => [driver.number, driver]),
-);
+const driverByNumber = new Map<number, DriverPointer>([
+  ...initialPointers.map((driver) => [driver.number, driver] as const),
+  ...CHINA_ONLY_DEMO_DRIVERS.map((driver) => [driver.number, driver] as const),
+]);
 const intervalStartMs = Date.parse(DEMO_INTERVAL_START_ISO);
 
 const minCircuitX = Math.min(...circuit.x);
@@ -757,13 +815,11 @@ export function useChinaDemoRaceData({
     const safeTotalLaps = Math.max(1, totalLaps);
     const currentLap = raceStarted
       ? (() => {
-          const leaderCode = rankedRows[0]?.code;
-          const leaderPointer = initialPointers.find(
-            (item) => item.code === leaderCode,
-          );
-          const leaderLapSeries = leaderPointer
-            ? (lapEntriesByDriver.get(leaderPointer.number) ?? [])
-            : [];
+          const leaderNumber = rankedRows[0]?.number;
+          const leaderLapSeries =
+            leaderNumber !== undefined
+              ? (lapEntriesByDriver.get(leaderNumber) ?? [])
+              : [];
           const leaderLapEntry = findLatestLapAtOrBefore(
             leaderLapSeries,
             activeIntervalMs,

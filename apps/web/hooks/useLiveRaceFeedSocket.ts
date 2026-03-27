@@ -33,10 +33,34 @@ type ServerEnvelope = {
   payload?: unknown;
 };
 
+type EventWithDateTime = LiveRaceFeedEvent & {
+  dateTime?: unknown;
+};
+
 function logSocketDebug(...args: unknown[]) {
   if (process.env.NODE_ENV !== "production") {
     console.info("[live-feed-socket]", ...args);
   }
+}
+
+function getEventTimestamp(event: LiveRaceFeedEvent | undefined): number | null {
+  if (!event) {
+    return null;
+  }
+
+  const dateTimeValue = (event as EventWithDateTime).dateTime;
+  const isoValue =
+    typeof dateTimeValue === "string"
+      ? dateTimeValue
+      : typeof event.date === "string"
+        ? event.date
+        : null;
+  if (!isoValue) {
+    return null;
+  }
+
+  const timestamp = Date.parse(isoValue);
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
 
 export function useLiveRaceFeedSocket({
@@ -44,7 +68,7 @@ export function useLiveRaceFeedSocket({
   events,
   race,
   wsUrl,
-  sendIntervalMs = 4000,
+  sendIntervalMs = 5000,
 }: UseLiveRaceFeedSocketOptions): UseLiveRaceFeedSocketResult {
   const [status, setStatus] = useState<SocketStatus>("idle");
   const [sentCount, setSentCount] = useState(0);
@@ -56,14 +80,25 @@ export function useLiveRaceFeedSocket({
   const [lastError, setLastError] = useState<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const nextSendTimerRef = useRef<number | null>(null);
+  const raceClockTimerRef = useRef<number | null>(null);
+  const countdownStartTimerRef = useRef<number | null>(null);
+  const countdownIntervalRef = useRef<number | null>(null);
   const awaitingServerRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioQueueRef = useRef<string[]>([]);
   const isAudioPlayingRef = useRef(false);
   const indexRef = useRef(0);
 
-  const totalCount = events.length;
+  const sortedEvents = useMemo(() => {
+    return [...events].sort((a, b) => {
+      const aMs = getEventTimestamp(a);
+      const bMs = getEventTimestamp(b);
+      const safeAMs = aMs === null ? Number.POSITIVE_INFINITY : aMs;
+      const safeBMs = bMs === null ? Number.POSITIVE_INFINITY : bMs;
+      return safeAMs - safeBMs;
+    });
+  }, [events]);
+  const totalCount = sortedEvents.length;
 
   const canConnect = useMemo(() => {
     return enabled && typeof wsUrl === "string" && wsUrl.length > 0;
@@ -139,14 +174,14 @@ export function useLiveRaceFeedSocket({
       void playNextQueuedAudio();
     };
 
-    const sendNextEvent = () => {
-      if (socket.readyState !== WebSocket.OPEN || awaitingServerRef.current) {
-        return;
+    const sendEventAtIndex = (eventIndex: number): boolean => {
+      if (socket.readyState !== WebSocket.OPEN) {
+        return false;
       }
 
-      const nextEvent = events[indexRef.current];
+      const nextEvent = sortedEvents[eventIndex];
       if (!nextEvent) {
-        return;
+        return false;
       }
 
       socket.send(
@@ -158,24 +193,92 @@ export function useLiveRaceFeedSocket({
       );
 
       awaitingServerRef.current = true;
-      indexRef.current += 1;
+      indexRef.current = eventIndex + 1;
       setSentCount(indexRef.current);
+      return true;
     };
 
-    const queueNextEvent = () => {
-      if (nextSendTimerRef.current !== null) {
-        window.clearTimeout(nextSendTimerRef.current);
+    const maybeSendDueEvents = (raceStartTimestamp: number, elapsedMs: number) => {
+      while (indexRef.current < sortedEvents.length) {
+        const nextEvent = sortedEvents[indexRef.current];
+        const eventTimestamp = getEventTimestamp(nextEvent);
+        if (eventTimestamp === null) {
+          sendEventAtIndex(indexRef.current);
+          continue;
+        }
+
+        const eventOffsetMs = eventTimestamp - raceStartTimestamp;
+        if (eventOffsetMs <= elapsedMs) {
+          sendEventAtIndex(indexRef.current);
+          continue;
+        }
+
+        break;
       }
 
-      nextSendTimerRef.current = window.setTimeout(() => {
-        // sendNextEvent();
-      }, sendIntervalMs);
+      if (indexRef.current >= sortedEvents.length && raceClockTimerRef.current !== null) {
+        window.clearInterval(raceClockTimerRef.current);
+        raceClockTimerRef.current = null;
+      }
     };
 
     socket.onopen = () => {
       logSocketDebug("WebSocket connection opened.");
       setStatus("open");
-      // sendNextEvent();
+
+      const raceStartTimestamp = Date.parse("2026-03-15T07:00:20.000Z");
+      const now = Date.now();
+      const msUntilRaceStart = raceStartTimestamp - now;
+      const countdownLeadMs = 10_000;
+
+      const startCountdown = () => {
+        if (countdownIntervalRef.current !== null) {
+          window.clearInterval(countdownIntervalRef.current);
+        }
+
+        const first = sortedEvents[0];
+        if (
+          indexRef.current === 0 &&
+          first &&
+          first.type === "race_control" &&
+          first.message === "Race Start"
+        ) {
+          sendEventAtIndex(0);
+        }
+
+        let remainingSeconds = 10;
+        logSocketDebug(`Countdown started: T-${remainingSeconds}s`);
+        countdownIntervalRef.current = window.setInterval(() => {
+          remainingSeconds -= 1;
+          if (remainingSeconds > 0) {
+            logSocketDebug(`Countdown: T-${remainingSeconds}s`);
+            return;
+          }
+
+          logSocketDebug("Countdown complete.");
+          if (countdownIntervalRef.current !== null) {
+            window.clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+          }
+        }, 1000);
+      };
+
+      const countdownDelayMs = Math.max(0, msUntilRaceStart - countdownLeadMs);
+      countdownStartTimerRef.current = window.setTimeout(() => {
+        startCountdown();
+      }, countdownDelayMs);
+
+      const clockStartDelayMs = Math.max(0, msUntilRaceStart);
+      window.setTimeout(() => {
+        const raceClockStartedAt = Date.now();
+        const tickMs = Math.max(100, Math.min(500, Math.floor(sendIntervalMs / 10)));
+
+        maybeSendDueEvents(raceStartTimestamp, 0);
+        raceClockTimerRef.current = window.setInterval(() => {
+          const elapsedMs = Date.now() - raceClockStartedAt;
+          maybeSendDueEvents(raceStartTimestamp, elapsedMs);
+        }, tickMs);
+      }, clockStartDelayMs);
     };
 
     socket.onmessage = (message) => {
@@ -206,7 +309,6 @@ export function useLiveRaceFeedSocket({
         }
 
         awaitingServerRef.current = false;
-        // queueNextEvent();
         return;
       }
 
@@ -219,7 +321,6 @@ export function useLiveRaceFeedSocket({
           setLastError(errorMessage);
         }
         awaitingServerRef.current = false;
-        // queueNextEvent();
       }
     };
 
@@ -234,9 +335,19 @@ export function useLiveRaceFeedSocket({
     };
 
     return () => {
-      if (nextSendTimerRef.current !== null) {
-        window.clearTimeout(nextSendTimerRef.current);
-        nextSendTimerRef.current = null;
+      if (raceClockTimerRef.current !== null) {
+        window.clearInterval(raceClockTimerRef.current);
+        raceClockTimerRef.current = null;
+      }
+
+      if (countdownStartTimerRef.current !== null) {
+        window.clearTimeout(countdownStartTimerRef.current);
+        countdownStartTimerRef.current = null;
+      }
+
+      if (countdownIntervalRef.current !== null) {
+        window.clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
       }
 
       if (socketRef.current) {
@@ -255,7 +366,7 @@ export function useLiveRaceFeedSocket({
       audioQueueRef.current = [];
       isAudioPlayingRef.current = false;
     };
-  }, [canConnect, events, race, sendIntervalMs, wsUrl]);
+  }, [canConnect, race, sendIntervalMs, sortedEvents, wsUrl]);
 
   return {
     status,

@@ -313,6 +313,7 @@ export const initialPointers: DriverPointer[] = [
 export interface RaceControlFeedEvent {
   type: "race_control";
   date: string;
+  dateTime?: string;
   meeting_key: number;
   session_key: number;
   message: string;
@@ -337,6 +338,7 @@ export interface LocationFeedEvent {
 export interface OvertakeFeedEvent {
   type: "overtake";
   date: string;
+  dateTime?: string;
   overtaking_driver_number: number;
   overtaken_driver_number: number;
   position: number;
@@ -345,6 +347,7 @@ export interface OvertakeFeedEvent {
 export interface SessionEventFeed {
   type: "event";
   date: string;
+  dateTime?: string;
   event_type: string;
   driver_number?: number;
   lap?: number;
@@ -359,6 +362,7 @@ export interface RaceFinishResult {
 export interface RaceFinishFeedEvent {
   type: "event";
   date: string;
+  dateTime?: string;
   event_type: "RACE_FINISH";
   results: RaceFinishResult[];
 }
@@ -370,6 +374,7 @@ export interface WsRaceContext {
   name?: string;
   country?: string;
   date?: string;
+  dateTime?: string;
 }
 
 export type LiveRaceFeedEvent =
