@@ -27,6 +27,7 @@ export function HomePageClient() {
   const { progressMap, resetProgressMap } = useAnimatedProgressMap();
   const isDemoRound = selectedRace.slug === "demo-live-round";
   const isJapanRound = selectedRace.slug === "japan";
+  const useHydratedDemoData = isDemoRound && isHydrated;
   const resolvedTrackPath = useResolvedTrackPath(selectedRace);
 
   useEffect(() => {
@@ -89,15 +90,15 @@ export function HomePageClient() {
     enabled: isJapanRound,
     totalLaps: selectedRace.laps,
   });
-  const activeTrackPath = isDemoRound
+  const activeTrackPath = useHydratedDemoData
     ? (chinaDemoData.trackPath ?? resolvedTrackPath)
     : resolvedTrackPath;
-  const activeProgressMap = isDemoRound
+  const activeProgressMap = useHydratedDemoData
     ? (chinaDemoData.progressMap ?? progressMap)
     : isJapanRound
       ? (openF1MqttData.progressMap ?? progressMap)
       : progressMap;
-  const activeLeaderboard = isDemoRound
+  const activeLeaderboard = useHydratedDemoData
     ? (chinaDemoData.leaderboard ?? leaderboard)
     : isJapanRound
       ? (openF1MqttData.leaderboard ?? leaderboard)
@@ -107,7 +108,7 @@ export function HomePageClient() {
     trackTemp,
     airTemp,
   } = toRaceMetrics(raceClock, selectedRace.laps);
-  const currentLap = isDemoRound
+  const currentLap = useHydratedDemoData
     ? (chinaDemoData.currentLap ?? fallbackLap)
     : isJapanRound
       ? (openF1MqttData.currentLap ?? fallbackLap)
@@ -147,13 +148,15 @@ export function HomePageClient() {
               progressMap={activeProgressMap}
               leaderboard={activeLeaderboard}
               driverPositions={
-                isDemoRound
+                useHydratedDemoData
                   ? chinaDemoData.driverPositions
                   : isJapanRound
                     ? openF1MqttData.driverPositions
                     : null
               }
-              lapEndPoint={isDemoRound ? chinaDemoData.lapEndPoint : null}
+              lapEndPoint={
+                useHydratedDemoData ? chinaDemoData.lapEndPoint : null
+              }
               isDemoRound={isDemoRound}
               liveSocketStatus={
                 isJapanRound ? openF1MqttData.status : liveFeedSocket.status
@@ -183,7 +186,9 @@ export function HomePageClient() {
               isHydrated={isHydrated}
               showDemoCommentaryPanel={isHydrated && isDemoRound}
               startCountdownValue={
-                isDemoRound ? (chinaDemoData.startCountdownValue ?? null) : null
+                useHydratedDemoData
+                  ? (chinaDemoData.startCountdownValue ?? null)
+                  : null
               }
               trackRotationDegrees={isDemoRound ? 120 : 0}
             />

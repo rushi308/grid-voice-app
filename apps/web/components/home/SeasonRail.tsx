@@ -29,9 +29,6 @@ export function SeasonRail({
         <h2 className="font-headline text-sm font-bold uppercase tracking-[0.22em] text-(--text-secondary)">
           2026 Season
         </h2>
-        <span className="rounded bg-[rgb(0_233_199/20%)] px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-(--signal-mint)">
-          Provisional
-        </span>
       </div>
 
       <div className="space-y-2">

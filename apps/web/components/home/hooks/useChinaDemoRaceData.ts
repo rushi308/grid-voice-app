@@ -11,7 +11,6 @@ import type { LeaderboardRow } from "../types";
 
 const DEMO_DRIVER_NUMBERS = [12, 16, 44, 63] as const;
 const DEMO_INTERVAL_START_ISO = "2026-03-15T07:04:06.055000+00:00";
-const DEMO_LOCATION_START_ISO = "2026-03-15T06:08:59.438000+00:00";
 const DEMO_START_COUNTDOWN_SECONDS = 3;
 
 type CircuitData = {
@@ -76,19 +75,47 @@ const locationsByDriverNumber: Record<number, LocationEntry[]> = {
   63: driver63Locations as LocationEntry[],
 };
 
-const driverByNumber = new Map(initialPointers.map((driver) => [driver.number, driver]));
+const driverByNumber = new Map(
+  initialPointers.map((driver) => [driver.number, driver]),
+);
 const intervalStartMs = Date.parse(DEMO_INTERVAL_START_ISO);
-const locationStartMs = Date.parse(DEMO_LOCATION_START_ISO);
 
 const minCircuitX = Math.min(...circuit.x);
 const maxCircuitX = Math.max(...circuit.x);
 const minCircuitY = Math.min(...circuit.y);
 const maxCircuitY = Math.max(...circuit.y);
+
+let minTelemetryX = minCircuitX;
+let maxTelemetryX = maxCircuitX;
+let minTelemetryY = minCircuitY;
+let maxTelemetryY = maxCircuitY;
+
+for (const driverNumber of DEMO_DRIVER_NUMBERS) {
+  const entries = locationsByDriverNumber[driverNumber] ?? [];
+  for (const entry of entries) {
+    if (entry.x === 0 && entry.y === 0) {
+      continue;
+    }
+    if (entry.x < minTelemetryX) {
+      minTelemetryX = entry.x;
+    }
+    if (entry.x > maxTelemetryX) {
+      maxTelemetryX = entry.x;
+    }
+    if (entry.y < minTelemetryY) {
+      minTelemetryY = entry.y;
+    }
+    if (entry.y > maxTelemetryY) {
+      maxTelemetryY = entry.y;
+    }
+  }
+}
+
 const VIEWBOX_MIN = 8;
 const VIEWBOX_MAX = 92;
 const VIEWBOX_SPAN = VIEWBOX_MAX - VIEWBOX_MIN;
-const circuitSpanX = Math.max(1, maxCircuitX - minCircuitX);
-const circuitSpanY = Math.max(1, maxCircuitY - minCircuitY);
+const circuitSpanX = Math.max(1, maxTelemetryX - minTelemetryX);
+const circuitSpanY = Math.max(1, maxTelemetryY - minTelemetryY);
 const circuitUniformSpan = Math.max(circuitSpanX, circuitSpanY);
 const offsetX = (circuitUniformSpan - circuitSpanX) / 2;
 const offsetY = (circuitUniformSpan - circuitSpanY) / 2;
@@ -105,7 +132,7 @@ function normalizeX(x: number): number {
   if (circuitUniformSpan <= 0) {
     return 50;
   }
-  const shifted = x - minCircuitX + offsetX;
+  const shifted = x - minTelemetryX + offsetX;
   const scaled = VIEWBOX_MIN + (shifted / circuitUniformSpan) * VIEWBOX_SPAN;
   return Math.min(VIEWBOX_MAX, Math.max(VIEWBOX_MIN, scaled));
 }
@@ -123,7 +150,7 @@ function normalizeY(y: number): number {
   if (circuitUniformSpan <= 0) {
     return 50;
   }
-  const shifted = y - minCircuitY + offsetY;
+  const shifted = y - minTelemetryY + offsetY;
   const scaled = VIEWBOX_MAX - (shifted / circuitUniformSpan) * VIEWBOX_SPAN;
   return Math.min(VIEWBOX_MAX, Math.max(VIEWBOX_MIN, scaled));
 }
@@ -189,8 +216,10 @@ function getCircuitPointAtProgress(progress: number): { x: number; y: number } {
   const endIndex = Math.min(size - 1, startIndex + 1);
   const t = scaledIndex - startIndex;
 
-  const interpolatedX = circuit.x[startIndex] + (circuit.x[endIndex] - circuit.x[startIndex]) * t;
-  const interpolatedY = circuit.y[startIndex] + (circuit.y[endIndex] - circuit.y[startIndex]) * t;
+  const interpolatedX =
+    circuit.x[startIndex] + (circuit.x[endIndex] - circuit.x[startIndex]) * t;
+  const interpolatedY =
+    circuit.y[startIndex] + (circuit.y[endIndex] - circuit.y[startIndex]) * t;
 
   return {
     x: normalizeX(interpolatedX),
@@ -250,7 +279,10 @@ function findLatestEntryAtOrBefore<T extends { date: string }>(
  * @example
  * findLatestLapAtOrBefore(driverLaps, Date.now());
  */
-function findLatestLapAtOrBefore(entries: LapEntry[], targetMs: number): LapEntry | null {
+function findLatestLapAtOrBefore(
+  entries: LapEntry[],
+  targetMs: number,
+): LapEntry | null {
   let low = 0;
   let high = entries.length - 1;
   let resultIndex = -1;
@@ -283,7 +315,10 @@ function findLatestLapAtOrBefore(entries: LapEntry[], targetMs: number): LapEntr
  * @example
  * findLatestIndexAtOrBefore(locations, Date.now()); // 152
  */
-function findLatestIndexAtOrBefore(entries: LocationEntry[], targetMs: number): number {
+function findLatestIndexAtOrBefore(
+  entries: LocationEntry[],
+  targetMs: number,
+): number {
   let low = 0;
   let high = entries.length - 1;
   let resultIndex = -1;
@@ -329,7 +364,10 @@ function findFirstNonZeroIndex(entries: LocationEntry[]): number {
  * @example
  * findVisibleLocationIndex(driverLocations, Date.now()); // 305
  */
-function findVisibleLocationIndex(entries: LocationEntry[], targetMs: number): number {
+function findVisibleLocationIndex(
+  entries: LocationEntry[],
+  targetMs: number,
+): number {
   const latestIndex = findLatestIndexAtOrBefore(entries, targetMs);
   if (latestIndex < 0) {
     return findFirstNonZeroIndex(entries);
@@ -356,7 +394,8 @@ const lapEntriesByDriver = new Map<number, LapEntry[]>();
 for (const driverNumber of DEMO_DRIVER_NUMBERS) {
   const series = laps
     .filter(
-      (entry) => entry.driver_number === driverNumber && entry.date_start !== null,
+      (entry) =>
+        entry.driver_number === driverNumber && entry.date_start !== null,
     )
     .sort((a, b) => {
       const aMs = parseDateMs(a.date_start ?? "");
@@ -369,7 +408,10 @@ for (const driverNumber of DEMO_DRIVER_NUMBERS) {
 const firstNonZeroLocationIndexByDriver = new Map<number, number>();
 for (const driverNumber of DEMO_DRIVER_NUMBERS) {
   const entries = locationsByDriverNumber[driverNumber] ?? [];
-  firstNonZeroLocationIndexByDriver.set(driverNumber, findFirstNonZeroIndex(entries));
+  firstNonZeroLocationIndexByDriver.set(
+    driverNumber,
+    findFirstNonZeroIndex(entries),
+  );
 }
 
 /**
@@ -402,58 +444,13 @@ function findFirstCoordinateChangeIndex(
 const firstCoordinateChangeIndexByDriver = new Map<number, number>();
 for (const driverNumber of DEMO_DRIVER_NUMBERS) {
   const entries = locationsByDriverNumber[driverNumber] ?? [];
-  const firstNonZeroIndex = firstNonZeroLocationIndexByDriver.get(driverNumber) ?? -1;
+  const firstNonZeroIndex =
+    firstNonZeroLocationIndexByDriver.get(driverNumber) ?? -1;
   firstCoordinateChangeIndexByDriver.set(
     driverNumber,
     findFirstCoordinateChangeIndex(entries, firstNonZeroIndex),
   );
 }
-
-const motionStartTimestampMsByDriver = new Map<number, number>();
-for (const driverNumber of DEMO_DRIVER_NUMBERS) {
-  const entries = locationsByDriverNumber[driverNumber] ?? [];
-  const firstNonZeroIndex = firstNonZeroLocationIndexByDriver.get(driverNumber) ?? -1;
-  const firstCoordinateChangeIndex =
-    firstCoordinateChangeIndexByDriver.get(driverNumber) ?? -1;
-  const effectiveStartIndex =
-    firstCoordinateChangeIndex >= 0 ? firstCoordinateChangeIndex : firstNonZeroIndex;
-  if (effectiveStartIndex < 0 || effectiveStartIndex >= entries.length) {
-    continue;
-  }
-
-  const startMs = parseDateMs(entries[effectiveStartIndex].date);
-  if (!Number.isNaN(startMs)) {
-    motionStartTimestampMsByDriver.set(driverNumber, startMs);
-  }
-}
-
-/**
- * Computes global replay start timestamp from earliest driver motion sample.
- *
- * @returns Earliest motion timestamp in epoch ms, or NaN.
- * @example
- * findLocationTimelineStartMs(); // 1773554939438
- */
-function findLocationTimelineStartMs(): number {
-  let earliest = Number.POSITIVE_INFINITY;
-  for (const driverNumber of DEMO_DRIVER_NUMBERS) {
-    const entries = locationsByDriverNumber[driverNumber] ?? [];
-    const firstNonZeroIndex = firstNonZeroLocationIndexByDriver.get(driverNumber) ?? -1;
-    const firstCoordinateChangeIndex =
-      firstCoordinateChangeIndexByDriver.get(driverNumber) ?? -1;
-    const index =
-      firstCoordinateChangeIndex >= 0 ? firstCoordinateChangeIndex : firstNonZeroIndex;
-    if (index >= 0) {
-      const ts = parseDateMs(entries[index].date);
-      if (!Number.isNaN(ts)) {
-        earliest = Math.min(earliest, ts);
-      }
-    }
-  }
-  return Number.isFinite(earliest) ? earliest : Number.NaN;
-}
-
-const locationTimelineStartMs = findLocationTimelineStartMs();
 
 /**
  * Resolves finish/start marker from first circuit point in `circuit.json`.
@@ -494,8 +491,8 @@ export function useChinaDemoRaceData({
     if (
       !enabled ||
       Number.isNaN(intervalStartMs) ||
-      Number.isNaN(locationStartMs) ||
-      Number.isNaN(locationTimelineStartMs)
+      Number.isNaN(minTelemetryX) ||
+      Number.isNaN(minTelemetryY)
     ) {
       return {
         trackPath: null,
@@ -508,7 +505,10 @@ export function useChinaDemoRaceData({
       };
     }
 
-    const raceRuntimeSeconds = Math.max(0, raceClockSeconds - DEMO_START_COUNTDOWN_SECONDS);
+    const raceRuntimeSeconds = Math.max(
+      0,
+      raceClockSeconds - DEMO_START_COUNTDOWN_SECONDS,
+    );
     const activeIntervalMs = intervalStartMs + raceRuntimeSeconds * 1000;
     const startCountdownValue =
       raceClockSeconds < DEMO_START_COUNTDOWN_SECONDS
@@ -530,21 +530,25 @@ export function useChinaDemoRaceData({
       }
 
       const locationSeries = locationsByDriverNumber[driverNumber] ?? [];
-      const driverMotionStartMs =
-        motionStartTimestampMsByDriver.get(driverNumber) ?? locationTimelineStartMs;
-      const driverActiveMs = driverMotionStartMs + raceRuntimeSeconds * 1000;
+      const driverActiveMs = activeIntervalMs;
       const locationIndex = raceStarted
         ? findVisibleLocationIndex(locationSeries, driverActiveMs)
         : -1;
       if (raceStarted && locationIndex >= 0) {
-        const firstNonZeroIndex = firstNonZeroLocationIndexByDriver.get(driverNumber) ?? 0;
+        const firstNonZeroIndex =
+          firstNonZeroLocationIndexByDriver.get(driverNumber) ?? 0;
         const firstCoordinateChangeIndex =
           firstCoordinateChangeIndexByDriver.get(driverNumber) ?? -1;
         const effectiveStartIndex =
-          firstCoordinateChangeIndex >= 0 ? firstCoordinateChangeIndex : firstNonZeroIndex;
+          firstCoordinateChangeIndex >= 0
+            ? firstCoordinateChangeIndex
+            : firstNonZeroIndex;
 
         const effectiveIndex = Math.max(locationIndex, effectiveStartIndex, 0);
-        const indexSpan = Math.max(1, locationSeries.length - 1 - effectiveStartIndex);
+        const indexSpan = Math.max(
+          1,
+          locationSeries.length - 1 - effectiveStartIndex,
+        );
         const indexProgress = Math.min(
           1,
           Math.max(0, (effectiveIndex - effectiveStartIndex) / indexSpan),
@@ -552,16 +556,22 @@ export function useChinaDemoRaceData({
 
         // Use index-based progress for launch continuity so cars move out of
         // lapEndPoint smoothly instead of snapping to a projected next-corner point.
-        const progress = locationIndex < effectiveStartIndex ? 0 : indexProgress;
+        const progress =
+          locationIndex < effectiveStartIndex ? 0 : indexProgress;
         progressMap[driver.code] = progress;
-        baseDriverPositions[driver.code] = normalizeLocationPoint(locationSeries[locationIndex]);
+        baseDriverPositions[driver.code] = normalizeLocationPoint(
+          locationSeries[locationIndex],
+        );
       } else {
         progressMap[driver.code] = 0;
         baseDriverPositions[driver.code] = commonStartPoint;
       }
 
       const intervalSeries = intervalEntriesByDriver.get(driverNumber) ?? [];
-      const intervalPoint = findLatestEntryAtOrBefore(intervalSeries, activeIntervalMs);
+      const intervalPoint = findLatestEntryAtOrBefore(
+        intervalSeries,
+        activeIntervalMs,
+      );
       const gapToLeaderSeconds = intervalPoint?.gap_to_leader ?? null;
       const intervalSeconds = intervalPoint?.interval;
 
@@ -589,13 +599,18 @@ export function useChinaDemoRaceData({
       ...row,
       position: index + 1,
       interval:
-        startCountdownValue !== null ? "STARTING" : index === 0 ? "LEADER" : row.interval,
+        startCountdownValue !== null
+          ? "STARTING"
+          : index === 0
+            ? "LEADER"
+            : row.interval,
     }));
 
     const driverPositions: Record<string, DriverPosition> = {};
     for (let index = 0; index < rankedRows.length; index += 1) {
       const row = rankedRows[index];
-      const basePoint = baseDriverPositions[row.code] ?? getCircuitPointAtProgress(0);
+      const basePoint =
+        baseDriverPositions[row.code] ?? getCircuitPointAtProgress(0);
       driverPositions[row.code] = basePoint;
     }
 
@@ -603,12 +618,20 @@ export function useChinaDemoRaceData({
     const currentLap = raceStarted
       ? (() => {
           const leaderCode = rankedRows[0]?.code;
-          const leaderPointer = initialPointers.find((item) => item.code === leaderCode);
+          const leaderPointer = initialPointers.find(
+            (item) => item.code === leaderCode,
+          );
           const leaderLapSeries = leaderPointer
             ? (lapEntriesByDriver.get(leaderPointer.number) ?? [])
             : [];
-          const leaderLapEntry = findLatestLapAtOrBefore(leaderLapSeries, activeIntervalMs);
-          return Math.min(safeTotalLaps, Math.max(1, leaderLapEntry?.lap_number ?? 1));
+          const leaderLapEntry = findLatestLapAtOrBefore(
+            leaderLapSeries,
+            activeIntervalMs,
+          );
+          return Math.min(
+            safeTotalLaps,
+            Math.max(1, leaderLapEntry?.lap_number ?? 1),
+          );
         })()
       : 1;
 
