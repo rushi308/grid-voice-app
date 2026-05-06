@@ -16,9 +16,9 @@ type LandingFeature = {
 
 const features: LandingFeature[] = [
   {
-    title: "AI voice commentary",
+    title: "F1 (Formula 1) AI voice commentary",
     description:
-      "Commentary over WebSockets: language models draft lines from laps, gaps, and timing; text-to-speech turns them into audio when enabled—streamed from an AWS Serverless pipeline the explore view consumes end to end. Live race-day voice commentary during real sessions is coming soon; try the flow on the demo round today.",
+      "Commentary over WebSockets: language models draft lines from laps, gaps, and timing; text-to-speech turns them into audio when enabled—streamed from an AWS Serverless pipeline the explore view consumes end to end. Live race-day voice commentary during real sessions is coming soon; try the flow on the Live Demo Sprint—it uses Chinese Grand Prix 2026 circuit and session-shaped data so you can explore without race day.",
     highlight: true,
   },
   {
@@ -111,7 +111,7 @@ export function LandingPage() {
           </div>
 
           <p className="mb-2 font-mono text-xs tracking-[0.35em] text-(--signal-mint) uppercase">
-            AI voice commentary
+            F1 · AI voice commentary
           </p>
           <h1 className="font-headline text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
             Grid <span className="text-(--signal-red)">Voice</span>
@@ -171,8 +171,8 @@ export function LandingPage() {
               Coming soon
             </span>
             : live AI voice commentary on race day (real sessions). Explore still
-            works now—maps, timing, and the commentary pipeline on the demo round—no
-            need to wait for lights out.
+            works now—maps, timing, and the commentary pipeline on the Live Demo Sprint
+            (Chinese Grand Prix 2026 demo data)—no need to wait for lights out.
           </p>
         </header>
 
@@ -184,11 +184,11 @@ export function LandingPage() {
             id="stack-heading"
             className="font-headline text-center text-2xl font-semibold tracking-tight sm:text-3xl"
           >
-            Built around AI voice commentary
+            Built around F1(Formula 1) AI voice commentary
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-center text-(--text-secondary)">
             Explore wires timing and UI state to a commentary service so generated lines
-            and audio stay in lockstep with the race—not after it.
+            and audio stay in lockstep with Formula 1 on track—not after it.
           </p>
 
           <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:gap-6">
